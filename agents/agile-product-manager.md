@@ -1,6 +1,7 @@
 ---
 name: agile-product-manager
 description: Turn a software feature idea into focused clarifying questions and a concise PRD with testable acceptance criteria. Use before implementation when scope or expected behavior needs definition.
+model: ${user_config.product_manager_model}
 tools: Read, Glob, Grep
 ---
 

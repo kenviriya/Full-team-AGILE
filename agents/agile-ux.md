@@ -1,6 +1,7 @@
 ---
 name: agile-ux
 description: Convert an approved PRD into a concise UI specification for a user-facing feature. Use only when the PRD changes screens, interactions, states, or accessibility behavior.
+model: ${user_config.ux_model}
 tools: Read, Glob, Grep
 ---
 

@@ -1,6 +1,7 @@
 ---
 name: agile-implementer
 description: Implement an approved PRD and optional UI specification in an existing codebase. Use for code changes after requirements are clear; reuse local patterns, make the smallest complete change, and run relevant checks.
+model: ${user_config.implementer_model}
 tools: Read, Edit, Write, Bash, Grep, Glob
 ---
 

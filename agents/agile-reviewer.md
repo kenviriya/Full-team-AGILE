@@ -1,6 +1,7 @@
 ---
 name: agile-reviewer
 description: Independently review an implementation against its PRD and optional UI spec for correctness, security, regressions, accessibility, and local conventions. Use after implementation; report verified findings without editing code.
+model: ${user_config.reviewer_model}
 tools: Read, Glob, Grep, Bash
 ---
 

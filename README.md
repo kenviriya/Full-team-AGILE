@@ -72,6 +72,21 @@ The pipeline delegates in this order:
 
 The bundled agents are also available for targeted delegation when only one phase is needed.
 
+### Configure agent models (Claude Code)
+
+Each role can use its own Claude Code model. All four settings default to `inherit`, which preserves the active session model:
+
+| Setting | Agent |
+| --- | --- |
+| `product_manager_model` | `agile-product-manager` |
+| `ux_model` | `agile-ux` |
+| `implementer_model` | `agile-implementer` |
+| `reviewer_model` | `agile-reviewer` |
+
+Set a value such as `haiku`, `sonnet`, `opus`, or `fable` (or an organization-available full model ID) when configuring the plugin. Explicit per-invocation model selection and `CLAUDE_CODE_SUBAGENT_MODEL` take precedence.
+
+This configuration applies to Claude Code agents only; Codex, Kimi Code, and OpenCode install the portable skill without Claude Code agent frontmatter.
+
 ### Optional workflow integrations
 
 When loaded in the active session, the feature pipeline uses Context Mode for efficient repository exploration and long-output analysis. For user-facing work, it uses Taste Skill through `design-taste-frontend` (`design-taste-frontend-v1` is also supported). Both integrations are optional; the pipeline works normally without them.
