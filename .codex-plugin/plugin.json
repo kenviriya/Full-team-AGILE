@@ -1,0 +1,14 @@
+{
+  "name": "full-team-agile",
+  "version": "0.1.0",
+  "description": "A compact Agile feature team for Codex: product, UX, implementation, and review.",
+  "author": {
+    "name": "Ken Viriya",
+    "url": "https://github.com/kenviriya"
+  },
+  "homepage": "https://github.com/kenviriya/Full-team-AGILE",
+  "repository": "https://github.com/kenviriya/Full-team-AGILE",
+  "license": "MIT",
+  "keywords": ["agile", "feature-delivery", "productivity"],
+  "skills": "./skills/"
+}

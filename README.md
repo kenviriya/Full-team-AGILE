@@ -24,6 +24,37 @@ In Claude Code, add this repository as a marketplace, then install the plugin:
 /plugin install full-team-agile@full-team-agile
 ```
 
+### Codex
+
+```bash
+codex plugin marketplace add kenviriya/Full-team-AGILE
+codex plugin install full-team-agile@full-team-agile
+```
+
+### Kimi Code
+
+Install the Agent Skills-compatible skill with the `skills` CLI:
+
+```bash
+npx skills add kenviriya/Full-team-AGILE
+```
+
+### OpenCode
+
+Install the Agent Skills-compatible skill with the `skills` CLI:
+
+```bash
+npx skills add kenviriya/Full-team-AGILE
+```
+
+Or add the repository directly to `opencode.json`:
+
+```json
+{
+  "plugin": ["github:kenviriya/Full-team-AGILE"]
+}
+```
+
 ## Use
 
 Ask Claude Code to use the feature pipeline for a feature request, or invoke the installed skill directly:
