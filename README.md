@@ -72,6 +72,10 @@ The pipeline delegates in this order:
 
 The bundled agents are also available for targeted delegation when only one phase is needed.
 
+### Optional workflow integrations
+
+When loaded in the active session, the feature pipeline uses Context Mode for efficient repository exploration and long-output analysis. For user-facing work, it uses Taste Skill through `design-taste-frontend` (`design-taste-frontend-v1` is also supported). Both integrations are optional; the pipeline works normally without them.
+
 ## Develop locally
 
 Run Claude Code with the plugin directory:
