@@ -1,37 +1,11 @@
 {
   "name": "full-team-agile",
   "version": "0.1.0",
-  "description": "A compact Agile feature team for Claude Code: product, UX, implementation, and review.",
+  "description": "A stateful feature-delivery team for Claude Code: product, UX, backend, frontend, QA, and review.",
   "author": {
     "name": "Ken Viriya",
     "url": "https://github.com/kenviriya"
   },
   "license": "MIT",
-  "skills": "./skills/",
-  "userConfig": {
-    "product_manager_model": {
-      "type": "string",
-      "title": "Product manager model",
-      "description": "Claude Code model for agile-product-manager (for example: inherit, haiku, sonnet, opus, or fable).",
-      "default": "inherit"
-    },
-    "ux_model": {
-      "type": "string",
-      "title": "UX model",
-      "description": "Claude Code model for agile-ux (for example: inherit, haiku, sonnet, opus, or fable).",
-      "default": "inherit"
-    },
-    "implementer_model": {
-      "type": "string",
-      "title": "Implementer model",
-      "description": "Claude Code model for agile-implementer (for example: inherit, haiku, sonnet, opus, or fable).",
-      "default": "inherit"
-    },
-    "reviewer_model": {
-      "type": "string",
-      "title": "Reviewer model",
-      "description": "Claude Code model for agile-reviewer (for example: inherit, haiku, sonnet, opus, or fable).",
-      "default": "inherit"
-    }
-  }
+  "skills": "./skills/"
 }

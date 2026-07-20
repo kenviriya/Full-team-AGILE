@@ -1,16 +1,18 @@
 # Full-team-AGILE
 
-A compact Claude Code plugin that moves a software feature from requirements to an independently reviewed implementation.
+A Claude Code plugin for delivering a feature through product definition, conditional UX, targeted implementation, QA, and independent review. Feature state and artifacts are stored in the Obsidian Vault so work can resume across sessions.
 
-It ships one feature-pipeline skill and four focused agents:
+It ships one `feature` skill and six focused agents:
 
 | Item | Use it for |
 | --- | --- |
-| `feature-pipeline` skill | Coordinating product, UX, implementation, and review for a feature request. |
-| `agile-product-manager` | Turning an idea into a concise PRD with testable acceptance criteria. |
-| `agile-ux` | Producing a UI specification when an approved feature has a user-facing surface. |
-| `agile-implementer` | Implementing an approved PRD and optional UI spec with repository-native patterns. |
-| `agile-reviewer` | Independently reviewing the completed implementation without editing it. |
+| `feature` skill | Orchestrating a feature from questions through QA and review, with durable state. |
+| `product-manager` | Clarifying requirements and writing a concise PRD with testable acceptance criteria. |
+| `ux-designer` | Producing a UI specification when an approved feature has a user-facing surface. |
+| `backend-engineer` | Implementing server-side, API, database, and integration work. |
+| `frontend-engineer` | Implementing client-side, component, state, and accessibility work. |
+| `qa-engineer` | Validating acceptance criteria with pass/fail evidence. |
+| `code-reviewer` | Independently reviewing the completed work without editing it. |
 
 ## Install
 
@@ -57,58 +59,35 @@ Or add the repository directly to `opencode.json`:
 
 ## Use
 
-Ask Claude Code to use the feature pipeline for a feature request, or invoke the installed skill directly:
+Invoke the installed skill directly:
 
 ```text
-/full-team-agile:feature-pipeline Add saved searches to the dashboard.
+/full-team-agile:feature Add saved searches to the dashboard.
 ```
 
-The pipeline delegates in this order:
+The workflow persists artifacts under `Features/<repo-name>/<slug>/` in the Obsidian Vault:
 
-1. Product manager writes the PRD.
-2. UX writes a UI spec only when the PRD has a user-facing surface.
-3. Implementer changes the code and runs relevant checks.
-4. Reviewer independently checks the result against the accepted artifacts.
+1. Product manager asks focused questions and writes `01-prd.md`.
+2. UX writes `02-ui-spec.md` only when the PRD changes a user-facing surface.
+3. Backend and frontend engineers implement only the applicable work; they run in parallel only when their changes are independent.
+4. QA validates acceptance criteria and writes `04-test-report.md`. Failures return the work to implementation.
+5. Code review writes `03-review-notes.md`. Requested changes return the work to implementation; approval completes the feature.
+
+Resume a saved feature with:
+
+```text
+/full-team-agile:feature continue <slug>
+```
 
 The bundled agents are also available for targeted delegation when only one phase is needed.
 
-### Configure agent models (Claude Code)
+### Claude Code requirements
 
-Each role can use its own Claude Code model. All four settings default to `inherit`, which preserves the active session model:
-
-| Setting | Agent |
-| --- | --- |
-| `product_manager_model` | `agile-product-manager` |
-| `ux_model` | `agile-ux` |
-| `implementer_model` | `agile-implementer` |
-| `reviewer_model` | `agile-reviewer` |
-
-Set a value such as `haiku`, `sonnet`, `opus`, or `fable` (or an organization-available full model ID) when configuring the plugin. Explicit per-invocation model selection and `CLAUDE_CODE_SUBAGENT_MODEL` take precedence.
-
-To configure the installed plugin manually, add its options to your Claude Code user `settings.json`:
-
-```json
-{
-  "pluginConfigs": {
-    "full-team-agile@full-team-agile": {
-      "options": {
-        "product_manager_model": "haiku",
-        "ux_model": "sonnet",
-        "implementer_model": "opus",
-        "reviewer_model": "opus"
-      }
-    }
-  }
-}
-```
-
-Use `inherit` for any role that should keep the active session model, then run `/reload-plugins` or restart Claude Code. The plugin ID can differ for a local install; use the ID shown by `/plugin` in that case.
-
-This configuration applies to Claude Code agents only; Codex, Kimi Code, and OpenCode install the portable skill without Claude Code agent frontmatter.
+The full workflow requires Claude Code with the Obsidian MCP tools because it reads and writes the feature state and artifacts in the Obsidian Vault. The portable skill is available to Codex, Kimi Code, and OpenCode, but those hosts need compatible agent delegation and Obsidian MCP support to run the complete resumable workflow.
 
 ### Optional workflow integrations
 
-When loaded in the active session, the feature pipeline uses Context Mode for efficient repository exploration and long-output analysis. For user-facing work, it uses Taste Skill through `design-taste-frontend` (`design-taste-frontend-v1` is also supported). Both integrations are optional; the pipeline works normally without them.
+For visually expressive user-facing work, the skill uses `design-taste-frontend` when available. This integration is optional; routine product UI and backend work do not require it.
 
 ## Develop locally
 
