@@ -7,5 +7,31 @@
     "url": "https://github.com/kenviriya"
   },
   "license": "MIT",
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "userConfig": {
+    "product_manager_model": {
+      "type": "string",
+      "title": "Product manager model",
+      "description": "Claude Code model for agile-product-manager (for example: inherit, haiku, sonnet, opus, or fable).",
+      "default": "inherit"
+    },
+    "ux_model": {
+      "type": "string",
+      "title": "UX model",
+      "description": "Claude Code model for agile-ux (for example: inherit, haiku, sonnet, opus, or fable).",
+      "default": "inherit"
+    },
+    "implementer_model": {
+      "type": "string",
+      "title": "Implementer model",
+      "description": "Claude Code model for agile-implementer (for example: inherit, haiku, sonnet, opus, or fable).",
+      "default": "inherit"
+    },
+    "reviewer_model": {
+      "type": "string",
+      "title": "Reviewer model",
+      "description": "Claude Code model for agile-reviewer (for example: inherit, haiku, sonnet, opus, or fable).",
+      "default": "inherit"
+    }
+  }
 }
