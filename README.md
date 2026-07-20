@@ -85,6 +85,25 @@ Each role can use its own Claude Code model. All four settings default to `inher
 
 Set a value such as `haiku`, `sonnet`, `opus`, or `fable` (or an organization-available full model ID) when configuring the plugin. Explicit per-invocation model selection and `CLAUDE_CODE_SUBAGENT_MODEL` take precedence.
 
+To configure the installed plugin manually, add its options to your Claude Code user `settings.json`:
+
+```json
+{
+  "pluginConfigs": {
+    "full-team-agile@full-team-agile": {
+      "options": {
+        "product_manager_model": "haiku",
+        "ux_model": "sonnet",
+        "implementer_model": "opus",
+        "reviewer_model": "opus"
+      }
+    }
+  }
+}
+```
+
+Use `inherit` for any role that should keep the active session model, then run `/reload-plugins` or restart Claude Code. The plugin ID can differ for a local install; use the ID shown by `/plugin` in that case.
+
 This configuration applies to Claude Code agents only; Codex, Kimi Code, and OpenCode install the portable skill without Claude Code agent frontmatter.
 
 ### Optional workflow integrations
