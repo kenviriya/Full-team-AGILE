@@ -1,0 +1,11 @@
+{
+  "name": "full-team-agile",
+  "version": "0.1.0",
+  "description": "A compact Agile feature team for Claude Code: product, UX, implementation, and review.",
+  "author": {
+    "name": "Ken Viriya",
+    "url": "https://github.com/kenviriya"
+  },
+  "license": "MIT",
+  "skills": "./skills/"
+}

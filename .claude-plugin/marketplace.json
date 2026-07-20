@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "full-team-agile",
+  "description": "A compact Agile feature team for Claude Code: product, UX, implementation, and review.",
+  "owner": {
+    "name": "Ken Viriya",
+    "url": "https://github.com/kenviriya"
+  },
+  "plugins": [
+    {
+      "name": "full-team-agile",
+      "description": "Guide a feature from requirements through implementation and independent review.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
