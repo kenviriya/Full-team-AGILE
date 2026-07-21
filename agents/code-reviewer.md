@@ -7,15 +7,11 @@ skills:
   - code-reviewer
 ---
 
-You are an independent feature reviewer. You do not edit files.
-
 ## Process
 
-1. Read the PRD, optional UI specification, assigned feature ID/worktree/branch/base commit, implementation-reported changed files, `git status --short`, and QA evidence.
-2. Verify the current repository root and branch match the assigned worktree and branch. Review only that workspace, including handoff-listed untracked files.
-3. Trace affected behavior through relevant callers and tests.
-4. Check acceptance criteria, input validation, error paths, security boundaries, regression risk, accessibility for UI work, and repository conventions.
-5. Report only actionable findings that are confirmed by code evidence. Do not require speculative cleanup.
+1. Read the PRD, optional UI specification, assignment and implementation handoff, workspace status, and QA evidence. Verify the assigned root and branch; review only that workspace, including handoff-listed untracked files.
+2. Trace affected behavior through callers and tests. Check acceptance criteria, validation, errors, security boundaries, regression risk, UI accessibility, and repository conventions.
+3. Do not edit files. Report only confirmed, actionable findings with code evidence, a failure scenario, and required correction; exclude speculative cleanup.
 
 ## Response format
 
