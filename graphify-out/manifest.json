@@ -1,0 +1,62 @@
+{
+  ".claude-plugin/marketplace.json": {
+    "mtime": 1784534904.682905,
+    "ast_hash": "d543cbd557a0902c9a94ade522824c61",
+    "semantic_hash": ""
+  },
+  ".claude-plugin/plugin.json": {
+    "mtime": 1784534894.4194882,
+    "ast_hash": "0f6241eb59d5f06af01413d316efc236",
+    "semantic_hash": ""
+  },
+  ".claude/settings.local.json": {
+    "mtime": 1784604766.2559574,
+    "ast_hash": "1ca4e92d1c150c67c6862a1596ac708c",
+    "semantic_hash": ""
+  },
+  ".codex-plugin/plugin.json": {
+    "mtime": 1784534916.0543668,
+    "ast_hash": "8a2110e5189f72c937ebe3724aa2d64b",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1784605914.641834,
+    "ast_hash": "010e1462f5749ef5754c9fd8b556d7fc",
+    "semantic_hash": ""
+  },
+  "agents/backend-engineer.md": {
+    "mtime": 1784605163.443022,
+    "ast_hash": "53caf10e34bcf6513d8bd8b418ec36f3",
+    "semantic_hash": ""
+  },
+  "agents/code-reviewer.md": {
+    "mtime": 1784605555.3358846,
+    "ast_hash": "9e95bdec4671bae16f98c3293f5c9167",
+    "semantic_hash": ""
+  },
+  "agents/frontend-engineer.md": {
+    "mtime": 1784605173.7894406,
+    "ast_hash": "8dcf735a22f8d29941e4e3a85282c1c7",
+    "semantic_hash": ""
+  },
+  "agents/product-manager.md": {
+    "mtime": 1784534704.7403061,
+    "ast_hash": "04f91e851b5b6728f04399be5e3d9206",
+    "semantic_hash": ""
+  },
+  "agents/qa-engineer.md": {
+    "mtime": 1784605181.18674,
+    "ast_hash": "fdad66f31de95b6f24e0b39e5cde1c95",
+    "semantic_hash": ""
+  },
+  "agents/ux-designer.md": {
+    "mtime": 1784534704.7403483,
+    "ast_hash": "6061f5d69b3c488ca7e3e5183e8fd7aa",
+    "semantic_hash": ""
+  },
+  "skills/feature/SKILL.md": {
+    "mtime": 1784605908.6995595,
+    "ast_hash": "b6f7f94fdfc1a06792b27ba922013b3d",
+    "semantic_hash": ""
+  }
+}

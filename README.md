@@ -65,25 +65,29 @@ Invoke the installed skill directly:
 /full-team-agile:feature Add saved searches to the dashboard.
 ```
 
-The workflow persists artifacts under `Features/<repo-name>/<slug>/` in the Obsidian Vault:
+The workflow persists artifacts under `Features/<repo-name>/<feature-id>/` in the Obsidian Vault. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
 
 1. Product manager asks focused questions and writes `01-prd.md`.
 2. UX writes `02-ui-spec.md` only when the PRD changes a user-facing surface.
-3. Backend and frontend engineers implement only the applicable work; they run in parallel only when their changes are independent.
-4. QA validates acceptance criteria and writes `04-test-report.md`. Failures return the work to implementation.
-5. Code review writes `03-review-notes.md`. Requested changes return the work to implementation; approval completes the feature.
+3. Before implementation, the skill creates one Git branch and worktree for the feature. Backend and frontend engineers implement only the applicable work; they run in parallel only when their ownership is disjoint and they share no contract, schema, migration, generated output, lockfile, fixture, configuration, or test resource.
+4. QA validates acceptance criteria in that feature worktree and writes `04-test-report.md`. Failures return the work to implementation.
+5. Code review evaluates that feature worktree and writes `03-review-notes.md`. Requested changes return the work to implementation; approval completes the feature.
 
-Resume a saved feature with:
+Different feature IDs may progress concurrently only in their own recorded worktrees. Worktrees isolate source changes, not shared databases, ports, caches, credentials, or other test resources; serialize tests or report a blocker when those resources cannot run independently.
+
+Resume a saved feature with the printed ID:
 
 ```text
-/full-team-agile:feature continue <slug>
+/full-team-agile:feature continue <feature-id>
 ```
+
+Legacy simple-slug feature folders remain resumable. If a legacy state has no worktree metadata, the skill asks whether to continue it exclusively in place or adopt worktree isolation; it never moves uncommitted work automatically. On completion, the branch and worktree remain for the user to commit, merge, and clean up.
 
 The bundled agents are also available for targeted delegation when only one phase is needed.
 
 ### Claude Code requirements
 
-The full workflow requires Claude Code with the Obsidian MCP tools because it reads and writes the feature state and artifacts in the Obsidian Vault. The portable skill is available to Codex, Kimi Code, and OpenCode, but those hosts need compatible agent delegation and Obsidian MCP support to run the complete resumable workflow.
+The full workflow requires Claude Code with the Obsidian MCP tools and Git worktree support because it reads and writes feature state and artifacts in the Obsidian Vault and isolates concurrent implementation work. The portable skill is available to Codex, Kimi Code, and OpenCode, but those hosts need compatible agent delegation, Obsidian MCP support, and Git worktree management to run concurrent implementation. Without worktree support, they must fail closed for concurrent source edits; non-mutating stages may still run.
 
 ### Optional workflow integrations
 

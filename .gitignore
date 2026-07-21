@@ -5,3 +5,6 @@
 
 # Local validation output
 coverage/
+
+# Feature skill worktrees
+.claude/worktrees/
