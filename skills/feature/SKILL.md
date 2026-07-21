@@ -34,21 +34,35 @@ When invoked as `/feature <description>` or `/feature continue <feature-id>`:
 
 ## Workspace contract
 
-Before the first source-mutating stage, create and record one workspace from the current immutable HEAD:
+Before the first source-mutating stage, capture and display this repository/workspace preview before creating a branch or worktree:
+
+```text
+repository name: <repo-name>
+repository root: <repo-root>
+current branch: <current branch>
+base commit: <current full HEAD SHA>
+working tree: clean|dirty
+planned branch: feature/<feature-id>
+planned worktree: <repo-root>/.claude/worktrees/<feature-id>
+```
+
+Persist that preview under `workspacePreview` in State.md, including when it was displayed and whether creation succeeded, failed, or was blocked. Immediately before creation, re-check the final repository root, branch, and full HEAD SHA against the preview. If any differs, stop without creating a branch or worktree, report the mismatch, and persist it in State.md. Do not delegate implementation until a matching preview is created successfully.
+
+When the re-check matches, create and record one workspace:
 
 ```text
 branch: feature/<feature-id>
 worktree: <repo-root>/.claude/worktrees/<feature-id>
-baseCommit: <current HEAD SHA>
+baseCommit: <current full HEAD SHA>
 ```
 
-Persist it under `workspace` in State.md. On continuation, reuse it only. Before every implementation, testing, or review delegation, verify the assigned directory, `git rev-parse --show-toplevel`, checked-out branch, and base commit all match State.md; missing or mismatched metadata stops work rather than recreating an unknown workspace.
+Persist the actual branch, worktree, and base commit under `workspace` in State.md. Record any creation failure in State.md and do not delegate implementation. On continuation, reuse a valid recorded workspace only; never silently recreate a missing or mismatched one. Before every implementation, testing, or review delegation, verify the assigned directory, `git rev-parse --show-toplevel`, checked-out branch, and base commit all match State.md; missing or mismatched metadata stops work rather than recreating an unknown workspace.
 
 Different feature IDs require separate recorded worktrees. Without worktree management, fail closed for concurrent source edits; non-mutating stages may proceed. Never automatically commit, merge, delete a worktree, or delete its branch.
 
 ## Delegation contract
 
-Every delegate receives the State.md reference, applicable artifact keys, and only its task-specific delta. Mutating delegates also receive allowed ownership scope; QA receives implementation changed files and `git status --short`; review additionally receives QA evidence. Agents verify and operate only in the recorded workspace.
+Every delegate receives the State.md reference, applicable artifact keys, and only its task-specific delta. Implementation handoff also supplies the persisted repository root, worktree, branch, base commit, and relevant workspace-preview/creation status; the implementation agent must recheck them and refuse to edit on a mismatch. Mutating delegates also receive allowed ownership scope; QA receives implementation changed files and `git status --short`; review additionally receives QA evidence. Agents verify and operate only in the recorded workspace.
 
 Implementation reports changed files, checks, assumptions, and blockers for State.md. QA and review are independent non-mutating gates. Keep UX/frontend conditional; do not implement with material unresolved requirements. Load optional design guidance only when `designTaste` is true, a compatible skill is available, and the work is visually expressive.
 
