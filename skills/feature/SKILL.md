@@ -28,8 +28,9 @@ When invoked as `/feature <description>` or `/feature continue <feature-id>`:
      "history": []
    }
    ```
-5. State.md is authoritative. Reread it before every resume or stage advance; after a stage, overwrite it with the next stage, timestamp, artifact paths, compact outcome (including changed files/checks/failures where applicable), and history. Do not duplicate artifact contents or rely on conversation memory.
-6. One session controls one feature ID. If it is active elsewhere, stop and ask the user to confirm takeover after the prior session is inactive. An overwrite-only state note is not an atomic lock.
+5. State.md is authoritative. Reread it before every resume or stage advance; after a stage, overwrite it with the next stage, timestamp, artifact paths, compact outcome (including changed files/checks/failures where applicable), `agentModels.feature` when supplied, and history. Do not duplicate artifact contents or rely on conversation memory.
+6. Parse an invocation-scoped agent mapping only when the invocation includes `agent-models=<JSON object>`. For a new feature, optionally persist it as `agentModels.feature` when the invocation also includes `persist-agent-models`; on continuation, reload that persisted mapping. Invocation mappings otherwise apply only to the current invocation and are never written to State.md.
+7. One session controls one feature ID. If it is active elsewhere, stop and ask the user to confirm takeover after the prior session is inactive. An overwrite-only state note is not an atomic lock.
 7. If mutation needs a legacy state without `version: 2` or workspace metadata, stop and ask whether to continue exclusively in the current checkout or adopt a worktree. Never move uncommitted work automatically.
 
 ## Workspace contract
@@ -59,6 +60,35 @@ baseCommit: <current full HEAD SHA>
 Persist the actual branch, worktree, and base commit under `workspace` in State.md. Record any creation failure in State.md and do not delegate implementation. On continuation, reuse a valid recorded workspace only; never silently recreate a missing or mismatched one. Before every implementation, testing, or review delegation, verify the assigned directory, `git rev-parse --show-toplevel`, checked-out branch, and base commit all match State.md; missing or mismatched metadata stops work rather than recreating an unknown workspace.
 
 Different feature IDs require separate recorded worktrees. Without worktree management, fail closed for concurrent source edits; non-mutating stages may proceed. Never automatically commit, merge, delete a worktree, or delete its branch.
+
+## Agent model configuration
+
+The supported keys are the six bundled agent names: `product-manager`, `ux-designer`, `backend-engineer`, `frontend-engineer`, `qa-engineer`, and `code-reviewer`. Model values are opaque non-empty strings; do not maintain an allowlist or rewrite provider/model IDs.
+
+Resolve the model immediately before every delegation, independently for that agent, in this order:
+
+1. Current invocation `agent-models=<JSON object>`.
+2. State.md `agentModels.feature`.
+3. `<repository-root>/.claude/full-team-agile.json` field `agentModels`.
+4. Plugin user option `CLAUDE_PLUGIN_OPTION_AGENT_MODELS`.
+5. The delegated agent's bundled frontmatter `model`.
+
+Each mapping must be a JSON object. Warn and skip an unreadable object, unknown agent key, or value that is not a non-empty string; include scope, agent when known, and the rejected value without affecting other entries. Never edit bundled frontmatter.
+
+Immediately before each bundled-agent delegation, reread State.md and the repository configuration and resolve the selected model from all five scopes.
+
+- For `sonnet`, `opus`, `haiku`, or `fable`, append this private resolver envelope to the native Agent tool call (omit empty scopes):
+
+  ```text
+  <!-- full-team-agile-agent-models: {"invocation":<current invocation object>,"feature":<State.md agentModels.feature object>} -->
+  ```
+
+  The plugin's `PreToolUse` hook removes the envelope and sets the resolved native alias in the Agent input. It does not auto-approve the call.
+- For every other non-empty model ID, do not invoke the native Agent tool. Start `scripts/gateway-agent.py` with the selected model, task-specific prompt, and recorded workspace identity. It uses `OPENAI_BASE_URL` and `OPENAI_API_KEY` only at request time and returns either a final response, a normalized request for one or more host tools, or a sanitized error.
+- For each gateway tool request, revalidate the recorded worktree, branch, and base commit; reject unknown tools and paths outside the recorded worktree; invoke the matching native Claude Code tool so its normal approval and denial behavior applies; then return the sanitized result to the gateway runner. Process one requested tool at a time; the runner must never execute repository actions itself.
+- Stop a gateway delegation at normal completion, a host denial/failure, 25 model turns, 10 elapsed minutes, workspace mismatch, interruption, or unrecoverable gateway error. Keep all completed edits; do not roll back. Record only compact outcome metadata (route, model, turns, terminal reason, changed files) in State.md, never gateway credentials, headers, request bodies, or transcripts.
+
+At plugin/session start, parse the user/global and repository mappings and display one baseline entry per bundled agent (repository → user/global → bundled default), including whether it routes to native or gateway, plus warnings. Do this once per plugin/session, not before each delegation.
 
 ## Delegation contract
 

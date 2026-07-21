@@ -85,6 +85,61 @@ Legacy simple-slug feature folders remain resumable. If a legacy state has no wo
 
 The bundled agents are also available for targeted delegation when only one phase is needed.
 
+### Configure agent models (Claude Code)
+
+Each bundled agent keeps its frontmatter default unless a higher-precedence mapping is usable. Resolution happens immediately before every delegation in this order: invocation → saved feature → repository → user/global → bundled default.
+
+The native Claude aliases `sonnet`, `opus`, `haiku`, and `fable` use Claude Code's normal `Agent` delegation. Every other non-empty model ID is forwarded unchanged to an OpenAI-compatible gateway. The gateway is configured only with standard environment variables:
+
+```bash
+export OPENAI_BASE_URL="https://gateway.example"
+export OPENAI_API_KEY="..."
+```
+
+Gateway model IDs are opaque strings: the plugin does not maintain provider-specific model lists.
+
+| Agent | Bundled default |
+| --- | --- |
+| `product-manager` | `haiku` |
+| `ux-designer` | `sonnet` |
+| `backend-engineer` | `opus` |
+| `frontend-engineer` | `opus` |
+| `qa-engineer` | `sonnet` |
+| `code-reviewer` | `opus` |
+
+Set the plugin's `agent_models` option to a JSON object for user/global defaults:
+
+```json
+{
+  "pluginConfigs": {
+    "full-team-agile@full-team-agile": {
+      "options": {
+        "agent_models": "{\"product-manager\":\"anthropic/claude-haiku\",\"backend-engineer\":\"provider/custom-model\"}"
+      }
+    }
+  }
+}
+```
+
+Repository overrides use `<repository-root>/.claude/full-team-agile.json`:
+
+```json
+{
+  "agentModels": {
+    "frontend-engineer": "provider/frontend-model",
+    "qa-engineer": "provider/test-model"
+  }
+}
+```
+
+Supply a current-run override by adding `agent-models=<JSON object>` to the `/full-team-agile:feature` invocation. Add `persist-agent-models` to save that mapping in the feature's `State.md`; resumed runs reload it. Native aliases are passed through a private prompt envelope that the `PreToolUse` hook removes before the delegate sees it. Gateway model IDs are routed by the feature workflow instead of being passed to Claude Code's native `Agent` field.
+
+A gateway run uses non-streaming OpenAI-compatible Chat Completions tool calling. The external model can request only normalized `read`, `glob`, `grep`, `bash`, `write`, and `edit` operations. Claude Code remains the host: it verifies the recorded worktree before each request, executes the matching native tool, and keeps the normal approval/denial behavior. The gateway process never executes shell or filesystem operations itself. Unknown tools and paths outside the worktree are denied and reported to the model as tool errors.
+
+Gateway runs stop after completion, unrecoverable error, denied/failed host action, 25 model turns, or 10 minutes. Completed edits remain in the worktree on every failure path; the workflow reports the terminal reason and changed files without automatic rollback. `OPENAI_API_KEY`, authorization headers, gateway request bodies, and transcripts are never written to feature state, artifacts, normal status output, or error messages. Native aliases work without gateway environment variables.
+
+Unknown agents, malformed mappings, and non-string or empty values warn without blocking other agents. The plugin prints the repository/user/bundled baseline once when its Claude Code session starts and does not repeat it for each delegation.
+
 ### Claude Code requirements
 
 The full workflow requires Claude Code with the Obsidian MCP tools and Git worktree support because it reads and writes feature state and artifacts in the Obsidian Vault and isolates concurrent implementation work. The portable skill is available to Codex, Kimi Code, and OpenCode, but those hosts need compatible agent delegation, Obsidian MCP support, and Git worktree management to run concurrent implementation. Without worktree support, they must fail closed for concurrent source edits; non-mutating stages may still run.

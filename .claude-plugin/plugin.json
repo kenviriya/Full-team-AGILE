@@ -1,11 +1,23 @@
 {
   "name": "full-team-agile",
   "version": "0.2.2",
-  "description": "A stateful feature-delivery team for Claude Code: product, UX, backend, frontend, QA, and review.",
+  "description": "A stateful feature-delivery workflow: product, UX, backend, frontend, QA, and review.",
   "author": {
     "name": "Ken Viriya",
     "url": "https://github.com/kenviriya"
   },
+  "homepage": "https://github.com/kenviriya/Full-team-AGILE",
+  "repository": "https://github.com/kenviriya/Full-team-AGILE",
   "license": "MIT",
-  "skills": "./skills/"
+  "keywords": ["agile", "feature-delivery", "productivity"],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "userConfig": {
+    "agent_models": {
+      "type": "string",
+      "title": "Agent models",
+      "description": "JSON object mapping bundled agent names to provider/model IDs.",
+      "default": "{}"
+    }
+  }
 }
