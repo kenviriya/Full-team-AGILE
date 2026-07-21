@@ -89,7 +89,7 @@ The bundled agents are also available for targeted delegation when only one phas
 
 Each bundled agent keeps its frontmatter default unless a higher-precedence mapping is usable. Resolution happens immediately before every delegation in this order: invocation → saved feature → repository → user/global → bundled default.
 
-The native Claude aliases `sonnet`, `opus`, `haiku`, and `fable` use Claude Code's normal `Agent` delegation. Every other non-empty model ID is forwarded unchanged to an OpenAI-compatible gateway. The gateway is configured only with standard environment variables:
+The native Claude aliases `sonnet`, `opus`, `haiku`, and `fable` use Claude Code's normal `Agent` delegation. Other non-empty model IDs are classified as gateway routes and can be used by an integration host through the included OpenAI-compatible protocol runner. The runner is configured only with standard environment variables:
 
 ```bash
 export OPENAI_BASE_URL="https://gateway.example"
@@ -132,11 +132,11 @@ Repository overrides use `<repository-root>/.claude/full-team-agile.json`:
 }
 ```
 
-Supply a current-run override by adding `agent-models=<JSON object>` to the `/full-team-agile:feature` invocation. Add `persist-agent-models` to save that mapping in the feature's `State.md`; resumed runs reload it. Native aliases are passed through a private prompt envelope that the `PreToolUse` hook removes before the delegate sees it. Gateway model IDs are routed by the feature workflow instead of being passed to Claude Code's native `Agent` field.
+Supply a current-run override by adding `agent-models=<JSON object>` to the `/full-team-agile:feature` invocation. Add `persist-agent-models` to save that mapping in the feature's `State.md`; resumed runs reload it. Native aliases are passed through a private prompt envelope that the `PreToolUse` hook removes before the delegate sees it. Gateway model IDs are identified by the feature workflow instead of being passed to Claude Code's native `Agent` field.
 
-A gateway run uses non-streaming OpenAI-compatible Chat Completions tool calling. The external model can request only normalized `read`, `glob`, `grep`, `bash`, `write`, and `edit` operations. Claude Code remains the host: it verifies the recorded worktree before each request, executes the matching native tool, and keeps the normal approval/denial behavior. The gateway process never executes shell or filesystem operations itself. Unknown tools and paths outside the worktree are denied and reported to the model as tool errors.
+A gateway run uses non-streaming OpenAI-compatible Chat Completions tool calling. The external model can request only normalized `read`, `glob`, `grep`, `bash`, `write`, and `edit` operations. The included runner does not execute shell or filesystem operations. An integration host must verify the recorded worktree, execute approved native tools, and return sanitized results to complete a tool loop. Claude Code plugins do not currently provide that host bridge, so gateway routes are not executable through the bundled `/full-team-agile:feature` workflow. Unknown tools and paths outside the worktree must be denied by any integration host.
 
-Gateway runs stop after completion, unrecoverable error, denied/failed host action, 25 model turns, or 10 minutes. Completed edits remain in the worktree on every failure path; the workflow reports the terminal reason and changed files without automatic rollback. `OPENAI_API_KEY`, authorization headers, gateway request bodies, and transcripts are never written to feature state, artifacts, normal status output, or error messages. Native aliases work without gateway environment variables.
+Gateway protocol runs stop after completion, unrecoverable error, 25 model turns, or 10 minutes. An integration host should stop on a denied or failed host action and retain completed edits rather than roll them back. `OPENAI_API_KEY`, authorization headers, gateway request bodies, and transcripts are never written to feature state, artifacts, normal status output, or error messages. Native aliases work without gateway environment variables.
 
 Unknown agents, malformed mappings, and non-string or empty values warn without blocking other agents. The plugin prints the repository/user/bundled baseline once when its Claude Code session starts and does not repeat it for each delegation.
 
