@@ -8,3 +8,6 @@ coverage/
 
 # Feature skill worktrees
 .claude/worktrees/
+
+# Generated codebase knowledge graph
+graphify-out/
