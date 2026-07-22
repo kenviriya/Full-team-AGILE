@@ -69,11 +69,11 @@ The workflow persists artifacts under `Features/<repo-name>/<feature-id>/` in th
 
 1. Product manager asks focused questions and writes `01-prd.md`.
 2. UX writes `02-ui-spec.md` only when the PRD changes a user-facing surface.
-3. Before implementation, the skill creates one Git branch and worktree for the feature. Backend and frontend engineers implement only the applicable work; they run in parallel only when their ownership is disjoint and they share no contract, schema, migration, generated output, lockfile, fixture, configuration, or test resource.
-4. QA validates acceptance criteria in that feature worktree and writes `04-test-report.md`. Failures return the work to implementation.
-5. Code review evaluates that feature worktree and writes `03-review-notes.md`. Requested changes return the work to implementation; approval completes the feature.
+3. Before implementation, the skill creates and checks out one `feature/<feature-id>` branch in the current checkout. If the target already exists and the tree is dirty, it blocks before checkout so the current branch and work remain unchanged; the user can clean or stash manually and rerun. An existing target is first blocked when checked out by another worktree; otherwise, resetting it to configured remote `main` requires a separate explicit confirmation that its commits will be discarded. Declining leaves the current branch and work unchanged. Backend and frontend engineers implement only the applicable work; they run in parallel only when their ownership is disjoint and they share no contract, schema, migration, generated output, lockfile, fixture, configuration, or test resource.
+4. QA validates acceptance criteria in the recorded checkout and writes `04-test-report.md`. Failures return the work to implementation.
+5. Code review evaluates the recorded checkout and writes `03-review-notes.md`. Requested changes return the work to implementation. On approval, only explicitly tracked temporary artifacts are removed immediately before completion. Each path is registered in State.md before it is created; durable Vault feature artifacts and untracked/user files are retained. A plugin-created local `feature/<feature-id>` branch may be deleted only after a fresh final confirmation, confirmation that it is not protected by repository policy, a clean checkout, return-branch and worktree-occupancy checks, and a safe merged-only `git branch -d`; otherwise it remains intact. Remote deletion is a separate opt-in confirmation for that exact `feature/<feature-id>` ref and remote; a local confirmation never authorizes `git push <remote> --delete <feature-branch>`.
 
-Different feature IDs may progress concurrently only in their own recorded worktrees. Worktrees isolate source changes, not shared databases, ports, caches, credentials, or other test resources; serialize tests or report a blocker when those resources cannot run independently.
+Different feature IDs cannot perform concurrent source edits in one checkout. Non-mutating stages may proceed; serialize source changes and tests that share repository resources.
 
 Resume a saved feature with the printed ID:
 
@@ -81,7 +81,7 @@ Resume a saved feature with the printed ID:
 /full-team-agile:feature continue <feature-id>
 ```
 
-Legacy simple-slug feature folders remain resumable. If a legacy state has no worktree metadata, the skill asks whether to continue it exclusively in place or adopt worktree isolation; it never moves uncommitted work automatically. On completion, the branch and worktree remain for the user to commit, merge, and clean up.
+Legacy simple-slug feature folders remain resumable. If a legacy state has no current-checkout workspace metadata, the skill stops and asks the user before mutating it; it never moves uncommitted work automatically. On completion, the branch remains for the user to commit, merge, and manage.
 
 The bundled agents are also available for targeted delegation when only one phase is needed.
 
@@ -134,7 +134,7 @@ Repository overrides use `<repository-root>/.claude/full-team-agile.json`:
 
 Supply a current-run override by adding `agent-models=<JSON object>` to the `/full-team-agile:feature` invocation. Add `persist-agent-models` to save that mapping in the feature's `State.md`; resumed runs reload it. Native aliases are passed through a private prompt envelope that the `PreToolUse` hook removes before the delegate sees it. Gateway model IDs are identified by the feature workflow instead of being passed to Claude Code's native `Agent` field.
 
-A gateway run uses non-streaming OpenAI-compatible Chat Completions tool calling. The external model can request only normalized `read`, `glob`, `grep`, `bash`, `write`, and `edit` operations. The included runner does not execute shell or filesystem operations. An integration host must verify the recorded worktree, execute approved native tools, and return sanitized results to complete a tool loop. Claude Code plugins do not currently provide that host bridge, so gateway routes are not executable through the bundled `/full-team-agile:feature` workflow. Unknown tools and paths outside the worktree must be denied by any integration host.
+A gateway run uses non-streaming OpenAI-compatible Chat Completions tool calling. The external model can request only normalized `read`, `glob`, `grep`, `bash`, `write`, and `edit` operations. The included runner does not execute shell or filesystem operations. An integration host must verify the recorded checkout, execute approved native tools, and return sanitized results to complete a tool loop. Claude Code plugins do not currently provide that host bridge, so gateway routes are not executable through the bundled `/full-team-agile:feature` workflow. Unknown tools and paths outside the recorded checkout must be denied by any integration host.
 
 Gateway protocol runs stop after completion, unrecoverable error, 25 model turns, or 10 minutes. An integration host should stop on a denied or failed host action and retain completed edits rather than roll them back. `OPENAI_API_KEY`, authorization headers, gateway request bodies, and transcripts are never written to feature state, artifacts, normal status output, or error messages. Native aliases work without gateway environment variables.
 
@@ -142,7 +142,7 @@ Unknown agents, malformed mappings, and non-string or empty values warn without 
 
 ### Claude Code requirements
 
-The full workflow requires Claude Code with the Obsidian MCP tools and Git worktree support because it reads and writes feature state and artifacts in the Obsidian Vault and isolates concurrent implementation work. The portable skill is available to Codex, Kimi Code, and OpenCode, but those hosts need compatible agent delegation, Obsidian MCP support, and Git worktree management to run concurrent implementation. Without worktree support, they must fail closed for concurrent source edits; non-mutating stages may still run.
+The full workflow requires Claude Code with the Obsidian MCP tools and Git branch support because it reads and writes feature state and artifacts in the Obsidian Vault. The portable skill is available to Codex, Kimi Code, and OpenCode, but those hosts need compatible agent delegation, Obsidian MCP support, and Git branch management. Concurrent source edits in one checkout must fail closed; non-mutating stages may still run.
 
 ### Optional workflow integrations
 

@@ -10,13 +10,13 @@ When invoked as `/feature <description>` or `/feature continue <feature-id>`:
 
 ## State contract
 
-1. Determine the canonical repository root and name before entering a worktree:
+1. Determine the canonical repository root and name in the current checkout:
    ```sh
    repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
    repo_name=$(basename "$repo_root")
    ```
 2. For a new feature, create and immediately print a unique readable `<feature-id>` from the description slug, lowercase UTC timestamp, and short random suffix; never reuse a feature folder.
-3. For continuation, validate the exact supplied ID against `^[a-z0-9]+(?:-+[a-z0-9]+)*$` before using it in a Vault path, worktree path, or branch name. Reject `/`, `.`, whitespace, and all other characters.
+3. For continuation, validate the exact supplied ID against `^[a-z0-9]+(?:-+[a-z0-9]+)*$` before using it in a Vault path or branch name. Reject `/`, `.`, whitespace, and all other characters.
 4. Read `Features/<repo-name>/<feature-id>/State.md` with `mcp__obsidian__read_note`; if absent, create it with `mcp__obsidian__write_note`:
    ```json
    {
@@ -24,18 +24,23 @@ When invoked as `/feature <description>` or `/feature continue <feature-id>`:
      "featureId": "<feature-id>",
      "stage": "questions",
      "repository": { "name": "<repo-name>", "root": "<repo-root>" },
+     "repositoryPolicy": { "source": "<repository-root>/.claude/full-team-agile.json", "protectedBranches": [], "valid": true },
      "artifacts": {},
+     "temporaryArtifacts": [],
+     "cleanup": { "status": "pending", "attempts": [] },
      "history": []
    }
    ```
-5. State.md is authoritative. Reread it before every resume or stage advance; after a stage, overwrite it with the next stage, timestamp, artifact paths, compact outcome (including changed files/checks/failures where applicable), `agentModels.feature` when supplied, and history. Do not duplicate artifact contents or rely on conversation memory.
-6. Parse an invocation-scoped agent mapping only when the invocation includes `agent-models=<JSON object>`. For a new feature, optionally persist it as `agentModels.feature` when the invocation also includes `persist-agent-models`; on continuation, reload that persisted mapping. Invocation mappings otherwise apply only to the current invocation and are never written to State.md.
-7. One session controls one feature ID. If it is active elsewhere, stop and ask the user to confirm takeover after the prior session is inactive. An overwrite-only state note is not an atomic lock.
-7. If mutation needs a legacy state without `version: 2` or workspace metadata, stop and ask whether to continue exclusively in the current checkout or adopt a worktree. Never move uncommitted work automatically.
+5. State.md is authoritative. Reread it before every resume or stage advance; after a stage, overwrite it with the next stage, timestamp, artifact paths, compact outcome (including changed files/checks/failures where applicable), `agentModels.feature` when supplied, cleanup status, repository policy, and history. Do not duplicate artifact contents or rely on conversation memory. Missing `temporaryArtifacts` or `cleanup` fields in an existing version-2 state mean an empty registry and pending cleanup; missing `repositoryPolicy` means no protected feature branches and records that default before cleanup.
+6. `temporaryArtifacts` is the only deletion authority for plugin- or agent-created temporary files. Before creating one, record its normalized repository-relative path, `kind` (`test` or `execution`), `createdBy`, `recordedAt`, and `status: "active"`; reject directories, paths outside the recorded root, `..` paths, duplicates, and durable Vault artifacts. Update its status after cleanup. Never infer ownership from Git status, path names, extensions, locations, or an after-the-fact claim.
+7. Parse an invocation-scoped agent mapping only when the invocation includes `agent-models=<JSON object>`. For a new feature, optionally persist it as `agentModels.feature` when the invocation also includes `persist-agent-models`; on continuation, reload that persisted mapping. Invocation mappings otherwise apply only to the current invocation and are never written to State.md.
+8. At workspace creation and again before cleanup, read `<repository-root>/.claude/full-team-agile.json` for an optional `protectedBranches` array of non-empty branch names. Persist it as `repositoryPolicy` with `source: "<repository-root>/.claude/full-team-agile.json"` and `valid: true`; an absent file or field persists `protectedBranches: []`. A malformed or unreadable policy persists `valid: false` with its source, blocks requested branch deletion, and records the validation failure; never assume an unreadable policy leaves a branch unprotected.
+9. One session controls one feature ID. If it is active elsewhere, stop and ask the user to confirm takeover after the prior session is inactive. An overwrite-only state note is not an atomic lock.
+10. If mutation needs a legacy state without `version: 2` or current-checkout workspace metadata, stop and ask the user to confirm continuing in the current checkout. Never move uncommitted work automatically.
 
 ## Workspace contract
 
-Before the first source-mutating stage, capture and display this repository/workspace preview before creating a branch or worktree:
+Before the first source-mutating stage, capture and display this repository/workspace preview before creating a branch:
 
 ```text
 repository name: <repo-name>
@@ -44,22 +49,27 @@ current branch: <current branch>
 base commit: <current full HEAD SHA>
 working tree: clean|dirty
 planned branch: feature/<feature-id>
-planned worktree: <repo-root>/.claude/worktrees/<feature-id>
 ```
 
-Persist that preview under `workspacePreview` in State.md, including when it was displayed and whether creation succeeded, failed, or was blocked. Immediately before creation, re-check the final repository root, branch, and full HEAD SHA against the preview. If any differs, stop without creating a branch or worktree, report the mismatch, and persist it in State.md. Do not delegate implementation until a matching preview is created successfully.
+Persist that preview under `workspacePreview` in State.md, including when it was displayed and whether creation succeeded, failed, or was blocked. Immediately before creation, re-check the final repository root, branch, and full HEAD SHA against the preview. If any differs, stop without creating a branch, report the mismatch, and persist it in State.md.
 
-When the re-check matches, create and record one workspace:
+If the working tree is dirty and `feature/<feature-id>` does not exist, ask once whether to create it from the configured remote `main` reference (default `origin/main`; use an existing configured remote when provided). Declining preserves the current branch and uncommitted work and records creation as blocked. If accepted, use `git checkout -b feature/<feature-id> <remote-main>` without `--force`; otherwise use the preview base commit. Treat Git's ordinary checkout refusal as a blocked creation: do not stash, discard, reset, or force checkout.
+
+If `feature/<feature-id>` already exists, first inspect `git worktree list --porcelain`. If another registered worktree has `branch refs/heads/feature/<feature-id>`, block without changing branches or files. Otherwise, if the tree is dirty, block before checkout and preserve the current branch and uncommitted work; the user may clean or stash manually, then rerun. Never stash, discard, reset, or force checkout automatically. For a clean tree, request a separate explicit destructive-reset confirmation before switching; state that resetting `feature/<feature-id>` to `<remote-main>` will discard commits on that branch. Do not infer this confirmation from any remote-main or branch-creation confirmation. After confirmation, first verify that `<remote-main>` resolves to a commit; if it does not, record creation as blocked and leave the current branch untouched. Only then may `git checkout feature/<feature-id>` followed by `git reset --hard <remote-main>` run. Declining records creation as blocked and leaves the branch and files untouched.
+
+Record one workspace. When the plugin creates the branch, also record the branch checked out immediately before creation as `returnBranch` and `branchCreatedByPlugin: true`; otherwise record `branchCreatedByPlugin: false`.
 
 ```text
+root: <repo-root>
 branch: feature/<feature-id>
-worktree: <repo-root>/.claude/worktrees/<feature-id>
-baseCommit: <current full HEAD SHA>
+baseCommit: <chosen full HEAD SHA>
+returnBranch: <pre-creation branch>
+branchCreatedByPlugin: true|false
 ```
 
-Persist the actual branch, worktree, and base commit under `workspace` in State.md. Record any creation failure in State.md and do not delegate implementation. On continuation, reuse a valid recorded workspace only; never silently recreate a missing or mismatched one. Before every implementation, testing, or review delegation, verify the assigned directory, `git rev-parse --show-toplevel`, checked-out branch, and base commit all match State.md; missing or mismatched metadata stops work rather than recreating an unknown workspace.
+Persist the actual root, branch, and base commit under `workspace`. Record any creation failure in State.md and do not delegate implementation. On continuation, reuse a valid recorded workspace only; never silently recreate a missing or mismatched one. Before every implementation, testing, or review delegation, verify `git rev-parse --show-toplevel`, checked-out branch, and base commit all match State.md; missing or mismatched metadata stops work rather than recreating an unknown workspace.
 
-Different feature IDs require separate recorded worktrees. Without worktree management, fail closed for concurrent source edits; non-mutating stages may proceed. Never automatically commit, merge, delete a worktree, or delete its branch.
+Different feature IDs cannot make concurrent source edits in one checkout; non-mutating stages may proceed. Never create, register, switch to, or remove a Git worktree. Never automatically commit, merge, or delete a branch; local feature-branch deletion is permitted only during the explicit cleanup stage.
 
 ## Agent model configuration
 
@@ -85,14 +95,14 @@ Immediately before each bundled-agent delegation, reread State.md and the reposi
 
   The plugin's `PreToolUse` hook removes the envelope and sets the resolved native alias in the Agent input. It does not auto-approve the call.
 - For every other non-empty model ID, do not invoke the native Agent tool. The bundled Claude Code workflow must report that gateway routes need an external integration host and stop before delegation; Claude Code plugin hooks cannot host the required tool loop. `scripts/gateway-agent.py` is a protocol runner for such a host, using `OPENAI_BASE_URL` and `OPENAI_API_KEY` only at request time.
-- An external integration host may process a gateway tool request only after revalidating the recorded worktree, branch, and base commit; it must reject unknown tools and paths outside the recorded worktree, invoke matching user-approved tools, and return sanitized results. The runner must never execute repository actions itself.
+- An external integration host may process a gateway tool request only after revalidating the recorded checkout root, branch, and base commit; it must reject unknown tools and paths outside the recorded checkout, invoke matching user-approved tools, and return sanitized results. The runner must never execute repository actions itself.
 - The protocol runner limits a gateway integration to normal completion, unrecoverable error, 25 model turns, or 10 elapsed minutes. An external host must stop on a tool denial/failure, retain completed edits without rollback, and record only compact outcome metadata (route, model, turns, terminal reason, changed files), never gateway credentials, headers, request bodies, or transcripts.
 
 At plugin/session start, parse the user/global and repository mappings and display one baseline entry per bundled agent (repository → user/global → bundled default), including whether it routes to native or gateway, plus warnings. Do this once per plugin/session, not before each delegation.
 
 ## Delegation contract
 
-Every delegate receives the State.md reference, applicable artifact keys, and only its task-specific delta. Implementation handoff also supplies the persisted repository root, worktree, branch, base commit, and relevant workspace-preview/creation status; the implementation agent must recheck them and refuse to edit on a mismatch. Mutating delegates also receive allowed ownership scope; QA receives implementation changed files and `git status --short`; review additionally receives QA evidence. Agents verify and operate only in the recorded workspace.
+Every delegate receives the State.md reference, applicable artifact keys, and only its task-specific delta. Implementation handoff also supplies the persisted repository root, branch, base commit, and relevant workspace-preview/creation status; the implementation agent must recheck them and refuse to edit on a mismatch. Mutating delegates also receive allowed ownership scope; QA receives implementation changed files and `git status --short`; review additionally receives QA evidence. Agents verify and operate only in the recorded checkout. Before any implementation or QA delegate creates a temporary test or execution file, it must report the path and kind for State.md registration; it must report the same path as a blocker if registration cannot occur. Delegates must not remove or claim ownership of any unregistered file.
 
 Before delegating UX-spec work or approved frontend work, inspect the target delegate's declared `skills` frontmatter. This is the delegated runtime's supported skill attachment list: the host loads those skills when it starts that agent. Match only skills in that list. Do not scan directories, parse skill files as an installation format, query unsupported host operations, or attempt dynamic skill loading. A user-installed or plugin-provided skill is eligible only when it is already declared in that target delegate's `skills` list.
 
@@ -110,8 +120,14 @@ Run backend/frontend lanes in parallel only with disjoint ownership and no share
 - **ux:** Match only skills declared for `ux-designer` under the delegation contract, then delegate with the selected already-loaded skill or recorded fallback warning. Save `Features/<repo-name>/<feature-id>/02-ui-spec.md`, then advance to **implementation**.
 - **implementation:** Delegate applicable server/API/database work to `backend-engineer` and client/component/accessibility work to `frontend-engineer` under the delegation contract. Match UI/UX guidance only for the frontend delegation and only against skills declared for `frontend-engineer`. Record reported changed files and checks, then advance to **testing**.
 - **testing:** Delegate to `qa-engineer`. Save `Features/<repo-name>/<feature-id>/04-test-report.md`; on any FAIL, record failures and return to **implementation**. Never proceed to review after a failed QA report.
-- **review:** Delegate to `code-reviewer`. Save `Features/<repo-name>/<feature-id>/03-review-notes.md`; requested changes return to **implementation**, approval sets **done**.
+- **review:** Delegate to `code-reviewer`. Save `Features/<repo-name>/<feature-id>/03-review-notes.md`; requested changes return to **implementation**, approval advances to **cleanup**.
+- **cleanup:** Run immediately before the final completion response. Reread State.md and validate the recorded repository root. For every active `temporaryArtifacts` entry only, resolve it beneath that root without following symlinks: reject a symlink in any parent path, then remove a regular file or unlink a final symlink; record `removed` or `alreadyAbsent`. Reject directories, invalid/outside-root paths, and unexpected file types. Any validation or deletion failure records a blocked cleanup attempt, leaves the feature in **cleanup**, and prevents a done claim. Durable Vault records (`State.md`, PRD, UI spec, QA report, and review notes) are never temporary artifacts.
+
+  Local feature-branch deletion is optional and requires a new final confirmation that names both `feature/<feature-id>` and `returnBranch`. If it is not requested, record `branchRetained` and continue. Before evaluating deletion, reread and validate `repositoryPolicy.protectedBranches`; an absent persisted policy must first be populated from `<repository-root>/.claude/full-team-agile.json`, and an invalid or unreadable policy blocks deletion. If requested, proceed only if `branchCreatedByPlugin` is true, the recorded branch exactly equals `feature/<feature-id>`, that branch is not in the persisted protected-branch policy, the return branch exists and differs, the checkout is clean, no other registered worktree has the feature branch checked out, and the branch is fully merged. Then `git switch <returnBranch>` and run only `git branch -d <feature-branch>`. Never force-delete, stash, reset, or remove a worktree. An unsafe condition or deletion failure is a blocked cleanup result; retain the branch and do not report done.
+
+  Remote deletion is separately optional. It requires another new final confirmation naming `feature/<feature-id>` and remote; local-deletion confirmation never authorizes it. Before evaluating deletion, reread and validate `repositoryPolicy.protectedBranches`; an absent persisted policy must first be populated from `<repository-root>/.claude/full-team-agile.json`, and an invalid or unreadable policy blocks deletion. If requested, proceed only if `branchCreatedByPlugin` is true, the recorded branch exactly equals `feature/<feature-id>`, that branch is not in the persisted protected-branch policy, the named remote is recorded/configured, and the remote feature ref exists. Delete only that ref with `git push <remote> --delete <feature-branch>`. Never delete a remote protected or unrelated branch, and do not treat a remote-deletion decline as a local-deletion decline. Record the local and remote outcomes independently.
+- **done:** Only after cleanup succeeds, summarize completion.
 
 ## Done
 
-On `done`, summarize what was built and list State.md's artifact paths, branch, worktree path, and base commit. State that the feature folder is the audit trail and commit, merge, integration, and worktree cleanup remain the user's responsibility.
+On `done`, summarize what was built and list State.md's artifact paths, checkout root, branch, and base commit. State that the feature folder is the audit trail and commit, merge, and integration remain the user's responsibility. Include the recorded cleanup outcome; if optional branch deletion was not requested, say the branch was retained.

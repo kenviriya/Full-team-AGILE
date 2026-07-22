@@ -5,8 +5,9 @@
 
 # Local validation output
 coverage/
+__pycache__/
 
-# Feature skill worktrees
+# Legacy local directories
 .claude/worktrees/
 
 # Generated codebase knowledge graph
