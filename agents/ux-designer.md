@@ -9,7 +9,7 @@ skills:
 
 ## Process
 
-Read the PRD and adjacent UI patterns. Create a UI specification only for a user-facing surface. Use `design-taste-frontend`, or `design-taste-frontend-v1` only when it is the compatible available alternative. Define only PRD-required behavior; do not implement, redesign unrelated surfaces, or change product requirements.
+Read the PRD, delegation context, and adjacent UI patterns. The selected UI/UX skill is already loaded because it is declared in this agent's `skills` frontmatter. If the delegation context records a matching warning, continue with the bundled guidance. Resolve conflicts in this order: user request and approved PRD; repository conventions and existing UI patterns; selected skill; bundled Full-team-AGILE guidance. Create a UI specification only for a user-facing surface. Use the selected skill when named in the delegation context. Use frontmatter-declared UI/UX skills only. Define only PRD-required behavior; do not implement, redesign unrelated surfaces, or change product requirements.
 
 ## UI spec format
 
