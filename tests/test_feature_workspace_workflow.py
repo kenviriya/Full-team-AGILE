@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import subprocess
 import tempfile
@@ -14,6 +16,74 @@ def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     return subprocess.run(
         ["git", *args], cwd=repo, text=True, capture_output=True, check=check
     )
+
+
+def discover_repositories(workspace: Path) -> list[str]:
+    workspace = workspace.resolve()
+    repositories = []
+    for child in sorted(path for path in workspace.iterdir() if path.is_dir() and not path.is_symlink()):
+        result = git(child, "rev-parse", "--show-toplevel", check=False)
+        if result.returncode:
+            continue
+        root = Path(result.stdout.strip()).resolve()
+        if root == child.resolve() and root.parent == workspace:
+            repositories.append(child.name)
+    return repositories
+
+
+def select_repositories(
+    workspace: Path,
+    detected: list[str],
+    *,
+    explicit: list[str] | None = None,
+    cwd: Path | None = None,
+    active_file: Path | None = None,
+    root_confirmed: bool = False,
+) -> list[str]:
+    eligible = set(detected)
+    if root_confirmed:
+        eligible.add(".")
+
+    def target(path: Path | None) -> str | None:
+        if path is None:
+            return None
+        location = path if path.is_dir() else path.parent
+        try:
+            location.resolve().relative_to(workspace.resolve())
+        except ValueError:
+            return None
+        while not location.exists() and location != workspace:
+            location = location.parent
+        result = git(location, "rev-parse", "--show-toplevel", check=False)
+        if result.returncode:
+            return None
+        root = Path(result.stdout.strip()).resolve()
+        relative = root.relative_to(workspace.resolve())
+        candidate = "." if not relative.parts else relative.as_posix()
+        return candidate if candidate in eligible else None
+
+    if explicit:
+        selected = [path for path in explicit if path in eligible]
+        if len(selected) != len(explicit):
+            raise ValueError("invalid or unconfirmed repository target")
+        return list(dict.fromkeys(selected))
+    inferred = target(cwd) or target(active_file)
+    if inferred:
+        return [inferred]
+    return detected if len(detected) == 1 else []
+
+
+def migrate_v2_state(state: dict[str, object], workspace: Path, root_confirmed: bool) -> dict[str, object]:
+    repository = state.get("repository")
+    if not isinstance(repository, dict) or Path(str(repository.get("root", ""))).resolve() != workspace.resolve():
+        raise ValueError("legacy repository root does not match workspace")
+    if not root_confirmed:
+        raise ValueError("root repository confirmation required")
+    return {
+        "version": 3,
+        "featureId": state["featureId"],
+        "repositories": {".": {"path": ".", "rootConfirmed": True}},
+    }
 
 
 def registered_worktrees(repo: Path) -> str:
@@ -241,6 +311,143 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         target_head = git(self.repo, "rev-parse", "HEAD").stdout.strip()
         git(self.repo, "checkout", "main")
         return target_head
+
+    def test_immediate_child_detection_excludes_nested_and_accepts_linked_worktree(self):
+        workspace = Path(self.tempdir.name) / "workspace"
+        workspace.mkdir()
+        api = workspace / "api"
+        web_source = Path(self.tempdir.name) / "web-source"
+        web = workspace / "web"
+        nested = workspace / "group/nested"
+        for repo in (api, web_source, nested):
+            repo.mkdir(parents=True)
+            git(repo, "init")
+        git(web_source, "config", "user.email", "test@example.com")
+        git(web_source, "config", "user.name", "Test User")
+        (web_source / "tracked.txt").write_text("web\n")
+        git(web_source, "add", "tracked.txt")
+        git(web_source, "commit", "-m", "initial")
+        git(web_source, "worktree", "add", str(web))
+        (workspace / "notes").mkdir()
+        external = Path(self.tempdir.name) / "external"
+        external.mkdir()
+        git(external, "init")
+        (workspace / "external-link").symlink_to(external, target_is_directory=True)
+
+        self.assertEqual(discover_repositories(workspace), ["api", "web"])
+
+    def test_selection_precedence_boundaries_and_ambiguous_root(self):
+        workspace = Path(self.tempdir.name) / "workspace"
+        api = workspace / "api"
+        web = workspace / "web"
+        nested = api / "nested"
+        for repo in (api, web, nested):
+            repo.mkdir(parents=True)
+            git(repo, "init")
+        detected = discover_repositories(workspace)
+        active_file = web / "src/app.py"
+
+        self.assertEqual(
+            select_repositories(workspace, detected, explicit=["api"], cwd=web, active_file=active_file),
+            ["api"],
+        )
+        self.assertEqual(select_repositories(workspace, detected, cwd=web), ["web"])
+        self.assertEqual(select_repositories(workspace, detected, active_file=active_file), ["web"])
+        self.assertEqual(select_repositories(workspace, detected, cwd=workspace), [])
+        self.assertEqual(select_repositories(workspace, detected, cwd=nested), [])
+        self.assertEqual(select_repositories(workspace, detected, active_file=nested / "file.py"), [])
+        self.assertEqual(select_repositories(workspace, detected, explicit=["api", "web"]), ["api", "web"])
+        with self.assertRaisesRegex(ValueError, "invalid or unconfirmed"):
+            select_repositories(workspace, detected, explicit=["group/nested"])
+        with self.assertRaisesRegex(ValueError, "invalid or unconfirmed"):
+            select_repositories(workspace, detected, explicit=["."])
+        self.assertEqual(
+            select_repositories(workspace, detected, explicit=["."], root_confirmed=True),
+            ["."],
+        )
+        self.assertEqual(
+            select_repositories(workspace, detected, active_file=Path(self.tempdir.name) / "outside.py"),
+            [],
+        )
+
+    def test_sole_child_auto_selection_and_stale_state_rejection(self):
+        workspace = Path(self.tempdir.name) / "workspace"
+        api = workspace / "api"
+        api.mkdir(parents=True)
+        git(api, "init")
+        detected = discover_repositories(workspace)
+
+        self.assertEqual(select_repositories(workspace, detected, cwd=workspace), ["api"])
+        api.rename(workspace / "removed")
+        self.assertEqual(discover_repositories(workspace), ["removed"])
+        with self.assertRaisesRegex(ValueError, "invalid or unconfirmed"):
+            select_repositories(workspace, discover_repositories(workspace), explicit=["api"])
+
+    def test_version_two_migration_requires_matching_confirmed_root(self):
+        workspace = Path(self.tempdir.name) / "workspace"
+        workspace.mkdir()
+        git(workspace, "init")
+        state = {
+            "version": 2,
+            "featureId": "demo",
+            "repository": {"name": "workspace", "root": str(workspace)},
+        }
+
+        with self.assertRaisesRegex(ValueError, "confirmation required"):
+            migrate_v2_state(state, workspace, False)
+        self.assertEqual(
+            migrate_v2_state(state, workspace, True),
+            {
+                "version": 3,
+                "featureId": "demo",
+                "repositories": {".": {"path": ".", "rootConfirmed": True}},
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            migrate_v2_state(state, workspace / "other", True)
+
+    def test_cross_repository_lifecycles_remain_isolated(self):
+        workspace = Path(self.tempdir.name) / "workspace"
+        api = workspace / "api"
+        web = workspace / "web"
+        for repo in (api, web):
+            repo.mkdir(parents=True)
+            git(repo, "init")
+            git(repo, "config", "user.email", "test@example.com")
+            git(repo, "config", "user.name", "Test User")
+            (repo / "tracked.txt").write_text(f"{repo.name}\n")
+            git(repo, "add", "tracked.txt")
+            git(repo, "commit", "-m", "initial")
+            git(repo, "branch", "-M", "main")
+            git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        results = {
+            "api": create_or_reset_target(api, "feature/demo"),
+            "web": create_or_reset_target(web, "feature/demo"),
+        }
+        (api / "tmp.txt").write_text("remove\n")
+        (web / "tmp.txt").write_text("keep\n")
+        self.assertEqual(results, {"api": "created", "web": "created"})
+        self.assertEqual(cleanup_temporary_artifacts(api, [artifact("tmp.txt")]), ["removed"])
+        self.assertTrue((web / "tmp.txt").exists())
+        self.assertEqual(git(api, "branch", "--show-current").stdout.strip(), "feature/demo")
+        self.assertEqual(git(web, "branch", "--show-current").stdout.strip(), "feature/demo")
+
+    def test_documentation_defines_workspace_scoped_contract(self):
+        for phrase in (
+            "immediate child directories",
+            "explicit repository path or name",
+            "current directory",
+            "active file",
+            "sole eligible child",
+            "session-scoped confirmation",
+            "workspace-relative",
+            "separate delegation",
+            "selected repository as `cwd`",
+            "success`, `failed`, `skipped`, `rejected`, or `unavailable",
+        ):
+            self.assertIn(phrase, WORKFLOW)
+        self.assertIn("immediate-child Git repositories", README)
+        self.assertIn("agentModels: {}", README)
 
     def test_clean_creation_uses_current_checkout_without_worktree_registration(self):
         before = registered_worktree_paths(self.repo)

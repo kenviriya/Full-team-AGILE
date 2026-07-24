@@ -1,6 +1,6 @@
 {
   "name": "full-team-agile",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "A stateful feature-delivery workflow: product, UX, backend, frontend, QA, and review.",
   "author": {
     "name": "Ken Viriya",
