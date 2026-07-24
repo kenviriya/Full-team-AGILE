@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -64,6 +65,35 @@ with tempfile.TemporaryDirectory() as directory:
     output = native["hookSpecificOutput"]
     assert output["updatedInput"]["model"] == "haiku"
     assert "permissionDecision" not in output
+
+with tempfile.TemporaryDirectory() as directory:
+    workspace = Path(directory)
+    api = workspace / "api"
+    web = workspace / "web"
+    for repo, document in (
+        (api, {"agentModels": {"backend-engineer": "haiku"}}),
+        (web, {"agentModels": {"backend-engineer": "sonnet"}}),
+    ):
+        (repo / ".claude").mkdir(parents=True)
+        subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+        (repo / ".claude/full-team-agile.json").write_text(json.dumps(document))
+    event = {
+        "tool_name": "Agent",
+        "tool_input": {
+            "subagent_type": "full-team-agile:backend-engineer",
+            "prompt": "Implement the feature.",
+        },
+    }
+    api_output = MODELS.pre_tool_use({**event, "cwd": str(api)}, ROOT, "{}")
+    web_output = MODELS.pre_tool_use({**event, "cwd": str(web)}, ROOT, "{}")
+    assert api_output["hookSpecificOutput"]["updatedInput"]["model"] == "haiku"
+    assert web_output["hookSpecificOutput"]["updatedInput"]["model"] == "sonnet"
+
+    empty_config = api / ".claude/full-team-agile.json"
+    empty_config.write_text('{"agentModels": {}}')
+    fallback = MODELS.pre_tool_use({**event, "cwd": str(api)}, ROOT, '{"backend-engineer":"fable"}')
+    assert fallback["hookSpecificOutput"]["updatedInput"]["model"] == "fable"
+    assert json.loads(empty_config.read_text())["agentModels"] == {}
 
 output = io.StringIO()
 with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(output):

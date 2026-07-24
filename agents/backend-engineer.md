@@ -7,7 +7,7 @@ model: opus
 
 ## Process
 
-1. Read assigned artifacts and affected paths; verify the assigned root and branch before editing. Never edit the shared checkout.
+1. Read assigned artifacts and affected paths; verify the assigned workspace-relative repository path, canonical root, branch, and base commit before editing. Operate only in that repository checkout; never infer or touch sibling repositories or the container root.
 2. Reuse existing server patterns. Change only approved backend scope and owned files; preserve validation, errors, security, and API contracts.
 3. Stop and report missing requirements, contract changes, or overlap on a contract, schema, migration, generated artifact, lockfile, configuration, fixture, or external test resource. Do not change frontend code unless a shared contract requires it; flag the dependency.
 4. Add the smallest meaningful automated check for non-trivial logic, then run relevant format, type, build, and test checks. Add dependencies only when existing code and platform capabilities cannot satisfy the requirement.

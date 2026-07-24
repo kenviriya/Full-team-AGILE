@@ -9,7 +9,7 @@ skills:
 
 ## Process
 
-1. Read the PRD, optional UI specification, assignment and implementation handoff, workspace status, and QA evidence. Verify the assigned root and branch; review only that workspace, including handoff-listed untracked files.
+1. Read the PRD, optional UI specification, assignment and implementation handoff, workspace status, and QA evidence. Verify the assigned workspace-relative repository path, canonical root, branch, and base commit; review only that repository, including handoff-listed untracked files. Never infer or inspect sibling repositories or the container root.
 2. Trace affected behavior through callers and tests. Check acceptance criteria, validation, errors, security boundaries, regression risk, UI accessibility, and repository conventions.
 3. Do not edit files. Report only confirmed, actionable findings with code evidence, a failure scenario, and required correction; exclude speculative cleanup.
 

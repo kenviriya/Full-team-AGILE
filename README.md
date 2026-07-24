@@ -65,13 +65,14 @@ Invoke the installed skill directly:
 /full-team-agile:feature Add saved searches to the dashboard.
 ```
 
-The workflow persists artifacts under `Features/<repo-name>/<feature-id>/` in the Obsidian Vault. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
+The workflow persists artifacts under `Features/<workspace-name>/<feature-id>/` in the Obsidian Vault. At feature start it treats the invocation root as a container and discovers only non-symlinked immediate-child Git repositories whose canonical root is that exact canonical child. It never follows child symlinks or recursively includes nested repositories. A Git repository at the container root is excluded unless the request identifies it and the user confirms it for the current session; its state path is `.`. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
 
 1. Product manager asks focused questions and writes `01-prd.md`.
 2. UX writes `02-ui-spec.md` only when the PRD changes a user-facing surface.
-3. Before implementation, the skill creates and checks out one `feature/<feature-id>` branch in the current checkout. If the target already exists and the tree is dirty, it blocks before checkout so the current branch and work remain unchanged; the user can clean or stash manually and rerun. An existing target is first blocked when checked out by another worktree; otherwise, resetting it to configured remote `main` requires a separate explicit confirmation that its commits will be discarded. Declining leaves the current branch and work unchanged. Backend and frontend engineers implement only the applicable work; they run in parallel only when their ownership is disjoint and they share no contract, schema, migration, generated output, lockfile, fixture, configuration, or test resource.
-4. QA validates acceptance criteria in the recorded checkout and writes `04-test-report.md`. Failures return the work to implementation.
-5. Code review evaluates the recorded checkout and writes `03-review-notes.md`. Requested changes return the work to implementation. On approval, only explicitly tracked temporary artifacts are removed immediately before completion. Each path is registered in State.md before it is created; durable Vault feature artifacts and untracked/user files are retained. A plugin-created local `feature/<feature-id>` branch may be deleted only after a fresh final confirmation, confirmation that it is not protected by repository policy, a clean checkout, return-branch and worktree-occupancy checks, and a safe merged-only `git branch -d`; otherwise it remains intact. Remote deletion is a separate opt-in confirmation for that exact `feature/<feature-id>` ref and remote; a local confirmation never authorizes `git push <remote> --delete <feature-branch>`.
+3. Before implementation, repository selection uses explicit repository name/path first, then explicit cross-repository scope, current directory, active file, and finally the sole eligible child. Current-directory and active-file inference resolve the nearest canonical Git root and use it only when that exact root was discovered, so an undiscovered nested repository never selects its parent. Explicit scope overrides editor context; ambiguous requests at a multi-repository container root ask instead of guessing. Invalid, stale, nested-undiscovered, outside-workspace, unselected, and unconfirmed-root targets are rejected before lifecycle Git actions. For each selected repository, the skill creates and checks out its own `feature/<feature-id>` branch and applies the existing safeguards independently: if the target already exists and the tree is dirty, it blocks before checkout; occupied worktrees block; and destructive reset requires separate confirmation. Backend and frontend engineers receive one workspace-relative repository assignment at a time and cannot infer or touch siblings.
+4. Explicit cross-repository work uses a separate delegation and Git lifecycle for each authorized repository. State records relative paths and isolated policy, branch/base metadata, changed files, checks, temporary artifacts, cleanup, and local/remote deletion outcomes. Results are reported by repository path as success, failure, skip, rejection, or unavailability; one repository's failure never authorizes an action in another.
+5. QA validates acceptance criteria separately in each recorded repository and writes repository-keyed evidence to `04-test-report.md`. Failures return only that repository to implementation.
+6. Code review evaluates each QA-passing repository and writes repository-keyed `03-review-notes.md`. On approval, only explicitly tracked temporary artifacts are removed within their owning repository immediately before completion. Local and remote branch deletion remain separate, fresh, repository-qualified opt-ins and retain all clean-tree, ownership, policy, worktree, merged-only, exact-ref, and non-force safeguards.
 
 Different feature IDs cannot perform concurrent source edits in one checkout. Non-mutating stages may proceed; serialize source changes and tests that share repository resources.
 
@@ -121,7 +122,7 @@ Set the plugin's `agent_models` option to a JSON object for user/global defaults
 }
 ```
 
-Repository overrides use `<repository-root>/.claude/full-team-agile.json`:
+Repository overrides use each selected `<repository-root>/.claude/full-team-agile.json`; delegations launch with that repository as their working directory, so sibling mappings remain isolated:
 
 ```json
 {
@@ -129,6 +130,14 @@ Repository overrides use `<repository-root>/.claude/full-team-agile.json`:
     "frontend-engineer": "provider/frontend-model",
     "qa-engineer": "provider/test-model"
   }
+}
+```
+
+An empty repository mapping (`agentModels: {}`) is valid and preserved exactly:
+
+```json
+{
+  "agentModels": {}
 }
 ```
 
