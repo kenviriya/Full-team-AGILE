@@ -65,7 +65,7 @@ Invoke the installed skill directly:
 /full-team-agile:feature Add saved searches to the dashboard.
 ```
 
-The workflow persists artifacts under `Features/<workspace-name>/<feature-id>/` in the Obsidian Vault. At feature start it treats the invocation root as a container and discovers only non-symlinked immediate-child Git repositories whose canonical root is that exact canonical child. It never follows child symlinks or recursively includes nested repositories. A Git repository at the container root is excluded unless the request identifies it and the user confirms it for the current session; its state path is `.`. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
+The workflow persists artifacts under the vault-relative `Features/<workspace-name>/<feature-id>/` path in the configured Obsidian MCP Vault, never beneath the repository checkout. At feature start it treats the invocation root as a container and discovers only non-symlinked immediate-child Git repositories whose canonical root is that exact canonical child. It never follows child symlinks or recursively includes nested repositories. A Git repository at the container root is excluded unless the request identifies it and the user confirms it for the current session; its state path is `.`. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
 
 1. Product manager asks focused questions and writes `01-prd.md`.
 2. UX writes `02-ui-spec.md` only when the PRD changes a user-facing surface.

@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
+FEATURE_ID = "full-semi-auto-full-approval-cleanup-obsidian-prd-20260724073110-a7f3"
 WORKFLOW = (ROOT / "skills/feature/SKILL.md").read_text()
 README = (ROOT / "README.md").read_text()
 
@@ -448,6 +449,44 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             self.assertIn(phrase, WORKFLOW)
         self.assertIn("immediate-child Git repositories", README)
         self.assertIn("agentModels: {}", README)
+
+    def test_documentation_scopes_feature_session_authorization_to_exact_feature_id(self):
+        for phrase in (
+            "featureSessionAuthorization",
+            f"Only feature `{FEATURE_ID}` may additionally store",
+            f"This section is an exception only for feature ID `{FEATURE_ID}`",
+            "No other feature ID may create, activate, copy, inherit, or interpret",
+            f'featureId: "{FEATURE_ID}"',
+            "require both the active feature ID and metadata `featureId` to equal that exact ID",
+            "current-session reauthorization",
+            'scope: "feature-session"',
+            "must not invoke or request plan mode",
+            "where the platform permits",
+            "plugin cannot bypass, auto-answer, or claim success",
+            "approved PRD artifact of this feature",
+            "active entries already registered",
+            "separate local/remote branch confirmations remain mandatory",
+            "Never treat persisted metadata as authorization for a later session",
+            "Do not represent the metadata as host permission configuration",
+        ):
+            self.assertIn(phrase, WORKFLOW)
+        self.assertEqual(WORKFLOW.count(FEATURE_ID), 3)
+        self.assertNotIn("A `/feature` invocation may include authorization metadata", WORKFLOW)
+        self.assertIn("No feature-session authorization may override platform permission decisions", WORKFLOW)
+
+        self.assertIn(
+            f"Only feature `{FEATURE_ID}` may additionally store the `featureSessionAuthorization`",
+            WORKFLOW,
+        )
+
+    def test_documentation_routes_feature_artifacts_to_obsidian_vault_only(self):
+        vault_root = "Features/<workspace-name>/<feature-id>/"
+        self.assertIn(vault_root, WORKFLOW)
+        self.assertIn("through the Obsidian MCP tools", WORKFLOW)
+        self.assertIn("Do not resolve this path under the workspace checkout", WORKFLOW)
+        self.assertIn("rather than silently falling back to the filesystem", WORKFLOW)
+        self.assertIn("vault-relative", README)
+        self.assertNotIn("/Users/kenviriya/Code/Claude-Brain", WORKFLOW)
 
     def test_clean_creation_uses_current_checkout_without_worktree_registration(self):
         before = registered_worktree_paths(self.repo)
