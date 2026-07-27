@@ -22,18 +22,18 @@ When invoked as `/release <sprint-id> version=<major.minor.patch> target=<branch
 2. Require a non-empty `target=<branch>` every time. Never infer `main`, a default branch, or another target.
 3. Require a non-empty `remote=<remote>` every time a push is planned. Never infer an upstream remote.
 4. For a multi-repository release, require explicit workspace-relative `repositories=<path,...>` or `repositories=all`. Never infer all repositories. A single-repository target may use its recorded repository only after it is shown in the preflight plan.
-5. A sprint release requires `Sprints/<workspace-name>/<sprint-id>/State.md` to be `done`, passing evidence in `02-integration-report.md`, and every referenced feature State.md to be done with passing QA and approved review evidence.
-6. A feature release requires `Features/<workspace-name>/<feature-id>/State.md` to be done with passing QA and approved review evidence.
+5. A sprint release requires the sprint's exact recorded State.md reference to be `done`, passing evidence in its `02-integration-report.md`, and every exact referenced feature State.md to be done with passing QA and approved review evidence.
+6. A feature release requires its exact recorded Feature State.md reference to be done with passing QA and approved review evidence.
 7. Reject missing, stale, outside-workspace, unselected, or ambiguous repositories. Do not release a repository merely because a feature or sprint once mentioned it.
 8. Reject an existing local or remote `v<version>` tag, a conflicting release ID, or a release target whose recorded source branch cannot be verified.
 
 ## State contract
 
-1. Capture the invocation workspace root and use its basename as `<workspace-name>`.
+1. Capture the invocation workspace root and use its basename as `<workspace-name>`. Durable release artifacts use Obsidian MCP vault tools only, never project-relative filesystem operations. The resolved release directory is `<artifact-root>/Releases/<workspace-name>/<release-id>/` (omit the prefix and slash when `artifact_root` is empty); `<artifact-root>` is the validated vault-relative parent announced at session start.
 2. For a new release, generate and immediately print a unique readable `<release-id>` from the target kind, version slug, lowercase UTC timestamp, and short random suffix. Never reuse a release folder. For continuation, validate the exact ID against `^[a-z0-9]+(?:-+[a-z0-9]+)*$`; reject `/`, `.`, whitespace, and all other characters.
-3. Persist `Releases/<workspace-name>/<release-id>/State.md` before preflight or mutation. Keep `01-release-plan.md`, `02-release-validation.md`, and `03-release-recap.md` in the same folder.
-4. State.md is authoritative for release execution. Reread it before preflight, confirmation, every repository mutation, push, publishing, continuation, and recap.
-5. Use versioned compact state containing `releaseId`, `mode`, `targetReference`, `version`, `target`, `remote`, `repositories`, `stage`, `confirmation`, `validation`, `push`, `publishing`, and `history`.
+3. Persist `<artifact-root>/Releases/<workspace-name>/<release-id>/State.md` through Obsidian MCP before preflight or mutation. Keep `01-release-plan.md`, `02-release-validation.md`, and `03-release-recap.md` in the same vault directory.
+4. State.md is authoritative for release execution. Reread it through Obsidian MCP before preflight, confirmation, every repository mutation, push, publishing, continuation, and recap. On continuation, look first at the configured path, then at legacy `Releases/<workspace-name>/<release-id>/State.md` only when the configured root is nonempty; stop if both exist. A missing `artifactRoot` means `""`; once found, its recorded artifact root and exact State.md path are authoritative. Never relocate artifacts.
+5. Use versioned compact state containing `releaseId`, `artifactRoot`, `mode`, `targetReference`, `version`, `target`, `remote`, `repositories`, `stage`, `confirmation`, `validation`, `push`, `publishing`, and `history`.
 6. Per repository, record only the workspace-relative path, recorded source branch and SHA, target branch and preflight SHA, release branch, merge order/results, validated release SHA, tag state, target-update state, push state, and compact failures. Never copy PRDs, UI specs, review notes, credentials, headers, tokens, raw publish transcripts, or arbitrary Git output into release state.
 
 ## Preflight and confirmation

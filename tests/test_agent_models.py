@@ -32,6 +32,14 @@ assert "agent=unknown" in warnings.getvalue()
 assert "agent=code-reviewer" in warnings.getvalue()
 assert MODELS.route("opus") == "native"
 assert MODELS.route("provider/custom-model") == "gateway"
+assert MODELS.artifact_root("") == ""
+assert MODELS.artifact_root("MVPVaults") == "MVPVaults"
+assert MODELS.artifact_root("nested/valid-prefix") == "nested/valid-prefix"
+warnings = io.StringIO()
+with contextlib.redirect_stderr(warnings):
+    for invalid in ("/absolute", "~/home", "../traversal", "MVPVaults/../Other", "C:\\drive", "back\\slash", "repeated//slash"):
+        assert MODELS.artifact_root(invalid) == ""
+assert warnings.getvalue().count("artifact root rejected") == 7
 
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
@@ -105,9 +113,10 @@ with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(outp
     MODELS.startup(ROOT, '{"product-manager":"user/model","ux-designer":"haiku"}', root)
 
 lines = output.getvalue().splitlines()
-assert len(lines) == len(MODELS.AGENTS)
-assert "product-manager -> repo/model (repository, gateway)" in lines[0]
-assert "ux-designer -> haiku (user/global, native)" in lines[1]
+assert len(lines) == len(MODELS.AGENTS) + 1
+assert lines[0] == "full-team-agile: artifact root -> <vault root> (vault-relative)"
+assert "product-manager -> repo/model (repository, gateway)" in lines[1]
+assert "ux-designer -> haiku (user/global, native)" in lines[2]
 
 hooks = json.loads((ROOT / "hooks/hooks.json").read_text())["hooks"]
 assert hooks["PreToolUse"][0]["matcher"] == "Agent"
@@ -116,6 +125,7 @@ for event in ("SessionStart", "PreToolUse"):
     command = hooks[event][0]["hooks"][0]["command"]
     assert "${user_config." not in command
     assert "CLAUDE_PLUGIN_OPTION_AGENT_MODELS=" not in command
+    assert "CLAUDE_PLUGIN_OPTION_ARTIFACT_ROOT=" not in command
 
 sent = []
 

@@ -446,8 +446,21 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             "success`, `failed`, `skipped`, `rejected`, or `unavailable",
         ):
             self.assertIn(phrase, WORKFLOW)
+        for phrase in (
+            "Obsidian MCP vault tools only",
+            "never project-relative filesystem operations",
+            "<artifact-root>/Features/<workspace-name>/<feature-id>/",
+            "artifactRoot",
+            "configured path",
+            "stop as ambiguous",
+            "Never move or relocate durable artifacts",
+            "<feature-directory>",
+        ):
+            self.assertIn(phrase, WORKFLOW)
         self.assertIn("immediate-child Git repositories", README)
         self.assertIn("agentModels: {}", README)
+        self.assertIn("Configure artifact storage", README)
+        self.assertIn("/Users/kenviriya/Code/Claude-Brain", README)
 
     def test_clean_creation_uses_current_checkout_without_worktree_registration(self):
         before = registered_worktree_paths(self.repo)

@@ -51,9 +51,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "Require a non-empty `target=<branch>` every time",
             "Require a non-empty `remote=<remote>` every time",
             "require explicit workspace-relative `repositories=<path,...>` or `repositories=all`",
-            "passing evidence in `02-integration-report.md`",
+            "passing evidence in its `02-integration-report.md`",
             "passing QA and approved review evidence",
-            "Releases/<workspace-name>/<release-id>/State.md",
+            "<artifact-root>/Releases/<workspace-name>/<release-id>/State.md",
+            "Obsidian MCP vault tools only",
+            "artifactRoot",
+            "exact recorded State.md reference",
+            "stop if both exist",
+            "Never relocate artifacts",
             "01-release-plan.md",
             "02-release-validation.md",
             "03-release-recap.md",
@@ -89,7 +94,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_documentation_and_manifest_versions_advertise_release(self):
         self.assertIn("`release` skill", README)
         self.assertIn("/full-team-agile:release", README)
-        self.assertEqual(CLAUDE_PLUGIN["version"], "0.4.0")
+        self.assertEqual(CLAUDE_PLUGIN["version"], "0.4.1")
         self.assertEqual(CLAUDE_PLUGIN["version"], CODEX_PLUGIN["version"])
 
 

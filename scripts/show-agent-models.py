@@ -51,6 +51,24 @@ def mapping(scope, value):
     return result
 
 
+def artifact_root(value):
+    if value in (None, ""):
+        return ""
+    if not isinstance(value, str):
+        print(f"full-team-agile: warning: artifact root rejected={value!r}", file=sys.stderr)
+        return ""
+    if (
+        value.startswith(("/", "~"))
+        or "\\" in value
+        or re.match(r"^[A-Za-z]:", value)
+        or any(not part or part in {".", ".."} for part in value.split("/"))
+        or any(ord(character) < 32 for character in value)
+    ):
+        print(f"full-team-agile: warning: artifact root rejected={value!r}", file=sys.stderr)
+        return ""
+    return value
+
+
 def repository_root(cwd):
     try:
         result = subprocess.run(
@@ -173,7 +191,8 @@ def pre_tool_use(event, plugin_root, user_value):
     }
 
 
-def startup(plugin_root, user_value, cwd):
+def startup(plugin_root, user_value, cwd, artifact_value=""):
+    print(f"full-team-agile: artifact root -> {artifact_root(artifact_value) or '<vault root>'} (vault-relative)")
     repository = repository_mapping(repository_root(cwd))
     user = mapping("user/global", user_value)
     defaults = bundled_defaults(plugin_root)
@@ -190,8 +209,9 @@ def startup(plugin_root, user_value, cwd):
 def main():
     plugin_root = Path(os.environ["CLAUDE_PLUGIN_ROOT"])
     user_value = os.environ.get("CLAUDE_PLUGIN_OPTION_AGENT_MODELS", "{}")
+    artifact_value = os.environ.get("CLAUDE_PLUGIN_OPTION_ARTIFACT_ROOT", "")
     if len(sys.argv) == 1 or sys.argv[1] == "startup":
-        startup(plugin_root, user_value, Path.cwd())
+        startup(plugin_root, user_value, Path.cwd(), artifact_value)
         return
     event = json.load(sys.stdin)
     if sys.argv[1] != "pre-agent":

@@ -73,7 +73,7 @@ Coordinate a sprint backlog with dependency-safe feature runs:
 /full-team-agile:sprint Deliver saved searches, including API, dashboard UI, and documentation.
 ```
 
-Sprint coordination persists `Sprints/<workspace-name>/<sprint-id>/` in the Obsidian Vault. It decomposes the backlog into feature-sized items, dispatches dependency-safe disjoint lanes as parallel `feature` workflows, blocks dependent work after an upstream failure, and requires a final integration gate before the sprint is done. Each delegated feature workflow routes its own specialized lifecycle agents; sprint never replaces that workflow's Git, QA, review, or cleanup lifecycle. Sprint writes `03-sprint-recap.md` for every terminal sprint outcome; successful integration checks are recorded in `02-integration-report.md`. A done sprint is eligible for an explicit `release` workflow; sprint itself does not merge, tag, or push.
+Sprint coordination persists `Sprints/<workspace-name>/<sprint-id>/` in the configured Obsidian MCP vault, not the active Git workspace. It decomposes the backlog into feature-sized items, dispatches dependency-safe disjoint lanes as parallel `feature` workflows, blocks dependent work after an upstream failure, and requires a final integration gate before the sprint is done. Each delegated feature workflow routes its own specialized lifecycle agents; sprint never replaces that workflow's Git, QA, review, or cleanup lifecycle. Sprint writes `03-sprint-recap.md` for every terminal sprint outcome; successful integration checks are recorded in `02-integration-report.md`. A done sprint is eligible for an explicit `release` workflow; sprint itself does not merge, tag, or push.
 
 Release defaults to a completed sprint:
 
@@ -87,9 +87,9 @@ Release one completed feature only with the explicit feature form. For multi-rep
 /full-team-agile:release feature <feature-id> version=1.2.3 target=main remote=origin repositories=apps/api,apps/web
 ```
 
-A release requires an explicit SemVer version, target branch, and remote. It saves `Releases/<workspace-name>/<release-id>/` in the Obsidian Vault, preflights recorded commits and clean trees, then asks for fresh confirmation before creating release branches, merging, validating, tagging, advancing the target, and pushing the exact target branch and annotated tag. It pushes after confirmed local success by default. Package publication and GitHub Releases remain disabled unless separately requested with a repository-qualified command or policy and separately confirmed. Resume an incomplete release with `/full-team-agile:release continue <release-id>`; it revalidates state and resumes only incomplete work. Release never infers `main` or multi-repository scope, stages arbitrary work, stashes, resets, force-pushes, deletes branches or tags, or automatically rolls back.
+A release requires an explicit SemVer version, target branch, and remote. It saves `Releases/<workspace-name>/<release-id>/` in the configured Obsidian MCP vault, not the active Git workspace, preflights recorded commits and clean trees, then asks for fresh confirmation before creating release branches, merging, validating, tagging, advancing the target, and pushing the exact target branch and annotated tag. It pushes after confirmed local success by default. Package publication and GitHub Releases remain disabled unless separately requested with a repository-qualified command or policy and separately confirmed. Resume an incomplete release with `/full-team-agile:release continue <release-id>`; it revalidates state and resumes only incomplete work. Release never infers `main` or multi-repository scope, stages arbitrary work, stashes, resets, force-pushes, deletes branches or tags, or automatically rolls back.
 
-The feature workflow persists artifacts under `Features/<workspace-name>/<feature-id>/` in the Obsidian Vault. At feature start it treats the invocation root as a container and discovers only non-symlinked immediate-child Git repositories whose canonical root is that exact canonical child. It never follows child symlinks or recursively includes nested repositories. A Git repository at the container root is excluded unless the request identifies it and the user confirms it for the current session; its state path is `.`. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
+The feature workflow persists artifacts under `Features/<workspace-name>/<feature-id>/` in the configured Obsidian MCP vault, never as a project-relative filesystem folder. At feature start it treats the invocation root as a container and discovers only non-symlinked immediate-child Git repositories whose canonical root is that exact canonical child. It never follows child symlinks or recursively includes nested repositories. A Git repository at the container root is excluded unless the request identifies it and the user confirms it for the current session; its state path is `.`. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
 
 1. Product manager asks focused questions and writes `01-prd.md`.
 2. UX writes `02-ui-spec.md` only when the PRD changes a user-facing surface.
@@ -109,6 +109,32 @@ Resume a saved feature with the printed ID:
 Legacy simple-slug feature folders remain resumable. If a legacy state has no current-checkout workspace metadata, the skill stops and asks the user before mutating it; it never moves uncommitted work automatically. On completion, the branch remains for the user to commit, merge, and manage.
 
 The bundled agents are also available for targeted delegation when only one phase is needed.
+
+### Configure artifact storage (Claude Code)
+
+Durable feature, sprint, and release files are read and written with Obsidian MCP vault tools. They are never created relative to the active Git workspace. With the Obsidian MCP vault rooted at `/Users/kenviriya/Code/Claude-Brain`, the default `artifact_root` of `""` produces:
+
+```text
+Features/<workspace-name>/<feature-id>/
+Sprints/<workspace-name>/<sprint-id>/
+Releases/<workspace-name>/<release-id>/
+```
+
+inside that vault. Set `artifact_root` only to a validated vault-relative parent directory when needed; for example, `"MVPVaults"` produces `MVPVaults/Features/...`, `MVPVaults/Sprints/...`, and `MVPVaults/Releases/...`. It is not an OS path and must not include `Features`, `Sprints`, or `Releases` itself.
+
+```json
+{
+  "pluginConfigs": {
+    "full-team-agile@full-team-agile": {
+      "options": {
+        "artifact_root": "MVPVaults"
+      }
+    }
+  }
+}
+```
+
+New State.md files record `artifactRoot`. On continuation, the recorded State.md location remains authoritative; the workflow can find legacy root-level records for compatibility but never moves or relocates artifacts automatically.
 
 ### Configure agent models (Claude Code)
 
