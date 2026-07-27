@@ -18,9 +18,9 @@ When invoked as `/sprint <backlog description>` or `/sprint continue <sprint-id>
 
 ## State contract
 
-1. Capture the invocation workspace root and use its basename as `<workspace-name>`. Durable sprint artifacts use Obsidian MCP vault tools only, never project-relative filesystem operations. The resolved sprint directory is `<artifact-root>/Sprints/<workspace-name>/<sprint-id>/` (omit the prefix and slash when `artifact_root` is empty); `<artifact-root>` is the validated vault-relative parent announced at session start.
+1. Capture the invocation workspace root and use its basename as `<workspace-name>`. Durable sprint artifacts use Obsidian MCP vault tools only, never project-relative filesystem operations. Set `<sprint-directory>` to `<artifact-root>/Sprints/<workspace-name>/<sprint-id>/` (omit the prefix and slash when `artifact_root` is empty); `<artifact-root>` is the validated vault-relative parent announced at session start.
 2. For a new sprint, generate and immediately print a unique readable `<sprint-id>` from the backlog slug, lowercase UTC timestamp, and short random suffix. Never reuse a sprint folder. For continuation, validate the exact ID against `^[a-z0-9]+(?:-+[a-z0-9]+)*$`; reject `/`, `.`, whitespace, and all other characters.
-3. Persist `<artifact-root>/Sprints/<workspace-name>/<sprint-id>/State.md` through Obsidian MCP before dispatching any item. Keep `01-sprint-plan.md`, `02-integration-report.md`, and `03-sprint-recap.md` in the same vault directory.
+3. Persist `<sprint-directory>/State.md` through Obsidian MCP before dispatching any item. Write `<sprint-directory>/01-sprint-plan.md`, `<sprint-directory>/02-integration-report.md`, and `<sprint-directory>/03-sprint-recap.md` through Obsidian MCP.
 4. State.md is authoritative for sprint coordination. Reread it through Obsidian MCP before planning changes, dispatch, dependency evaluation, continuation, and the integration gate. On continuation, look first at the configured path, then at legacy `Sprints/<workspace-name>/<sprint-id>/State.md` only when the configured root is nonempty; stop if both exist. A missing `artifactRoot` means `""`; once found, its recorded artifact root and exact State.md path are authoritative. Never relocate artifacts.
 5. Use versioned compact state containing `sprintId`, `artifactRoot`, `stage`, `workspace`, `backlog`, `items`, `lanes`, `integration`, and `history`. Each item stores its description, feature ID, exact feature State.md reference, status, `dependsOn`, declared ownership/resources, lane, blockers, and compact outcome.
 6. Item and sprint IDs are safe path segments. Dependencies refer only to existing item IDs. Reject self-dependencies and dependency cycles before any dispatch.
@@ -30,7 +30,7 @@ When invoked as `/sprint <backlog description>` or `/sprint continue <sprint-id>
 ## Planning and lanes
 
 1. Ask only questions material to feature acceptance boundaries, dependencies, repository scope, or shared ownership/resources. Do not infer an unspecified dependency or ownership claim.
-2. Before dispatch, write `01-sprint-plan.md` with every item ID, feature-sized description, acceptance boundary, dependency IDs, intended repository scope when known, ownership/resources, lane, lane rationale, and planned feature invocation.
+2. Before dispatch, write `<sprint-directory>/01-sprint-plan.md` through Obsidian MCP with every item ID, feature-sized description, acceptance boundary, dependency IDs, intended repository scope when known, ownership/resources, lane, lane rationale, and planned feature invocation.
 3. An item is `ready` only when every dependency is `done` and it has no unresolved planning blocker.
 4. Run items concurrently only when they target different selected repositories, have disjoint declared ownership, and have no shared path area, API/shared contract, schema/migration, generated artifact, lockfile/configuration, fixture, or external test resource. The feature workflow has no separate checkout/worktree isolation for concurrent feature IDs in one repository.
 5. Unknown ownership or unresolved contracts serialize work rather than allowing optimistic parallelism. Items sharing a selected repository serialize even when their declared resources are otherwise disjoint.
@@ -55,9 +55,9 @@ When invoked as `/sprint <backlog description>` or `/sprint continue <sprint-id>
 2. Run the integration gate only when every item is `done`.
 3. Before the gate, reread every referenced feature State.md and verify each is done with passing QA and approved review evidence.
 4. Collect relevant declared cross-item contract checks and recorded repository-specific checks. Run only integration checks relevant to the planned interactions and permitted without overriding feature safeguards.
-5. Write commands, pass/fail evidence, impacted items, and failures to `02-integration-report.md`.
+5. Write commands, pass/fail evidence, impacted items, and failures to `<sprint-directory>/02-integration-report.md` through Obsidian MCP.
 6. Mark the sprint `done` only when every required integration check passes. A failed check marks the sprint `failed`; do not automatically roll back, reopen, merge, reset, delete, or clean up feature work.
 
 ## Done
 
-For every terminal sprint status (`done`, `failed`, or `blocked`), write `03-sprint-recap.md`. Include the sprint ID, workspace, final status, every item ID/feature ID/status/compact outcome, blocked items and upstream reasons, compact lane/batch results, integration status with `02-integration-report.md`, and referenced feature State.md paths. On `done`, print the same concise recap. State that feature branches remain under the user's control for commit, merge, cleanup, and branch management; never claim a passing integration gate for a non-`done` sprint.
+For every terminal sprint status (`done`, `failed`, or `blocked`), write `<sprint-directory>/03-sprint-recap.md` through Obsidian MCP. Include the sprint ID, workspace, final status, every item ID/feature ID/status/compact outcome, blocked items and upstream reasons, compact lane/batch results, integration status with `<sprint-directory>/02-integration-report.md`, and referenced feature State.md paths. On `done`, print the same concise recap. State that feature branches remain under the user's control for commit, merge, cleanup, and branch management; never claim a passing integration gate for a non-`done` sprint.

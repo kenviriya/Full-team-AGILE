@@ -215,7 +215,14 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertNotIn("- **cleanup:**", WORKFLOW)
 
     def test_workflow_keeps_sprint_and_feature_records_separate_and_requires_integration(self):
-        self.assertIn("<artifact-root>/Sprints/<workspace-name>/<sprint-id>/State.md", WORKFLOW)
+        self.assertIn(
+            "Set `<sprint-directory>` to `<artifact-root>/Sprints/<workspace-name>/<sprint-id>/`",
+            WORKFLOW,
+        )
+        self.assertIn("<sprint-directory>/State.md", WORKFLOW)
+        self.assertIn("<sprint-directory>/01-sprint-plan.md", WORKFLOW)
+        self.assertIn("<sprint-directory>/02-integration-report.md", WORKFLOW)
+        self.assertIn("<sprint-directory>/03-sprint-recap.md", WORKFLOW)
         self.assertIn("Obsidian MCP vault tools only", WORKFLOW)
         self.assertIn("artifactRoot", WORKFLOW)
         self.assertIn("exact feature State.md reference", WORKFLOW)
