@@ -18,17 +18,48 @@ def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     )
 
 
+def is_primary_checkout(workspace: Path, child: Path) -> bool:
+    root_result = git(child, "rev-parse", "--show-toplevel", check=False)
+    git_dir_result = git(child, "rev-parse", "--git-dir", check=False)
+    if root_result.returncode or git_dir_result.returncode:
+        return False
+    resolved_child = child.resolve()
+    if resolved_child == workspace / ".claude" / "worktrees" or (workspace / ".claude" / "worktrees") in resolved_child.parents:
+        return False
+    return (
+        Path(root_result.stdout.strip()).resolve() == resolved_child
+        and resolved_child.parent == workspace
+        and (resolved_child / ".git").is_dir()
+        and (child / git_dir_result.stdout.strip()).resolve() == (resolved_child / ".git")
+    )
+
+
 def discover_repositories(workspace: Path) -> list[str]:
     workspace = workspace.resolve()
-    repositories = []
-    for child in sorted(path for path in workspace.iterdir() if path.is_dir() and not path.is_symlink()):
-        result = git(child, "rev-parse", "--show-toplevel", check=False)
-        if result.returncode:
-            continue
-        root = Path(result.stdout.strip()).resolve()
-        if root == child.resolve() and root.parent == workspace:
-            repositories.append(child.name)
-    return repositories
+    return [
+        child.name
+        for child in sorted(path for path in workspace.iterdir() if path.is_dir() and not path.is_symlink())
+        if is_primary_checkout(workspace, child)
+    ]
+
+
+def validate_pre_edit_context(
+    runtime: Path, repository: Path, branch: str, base_commit: str
+) -> bool:
+    runtime = runtime.resolve()
+    repository = repository.resolve()
+    if runtime != repository or not (repository / ".git").is_dir():
+        return False
+    root = git(runtime, "rev-parse", "--show-toplevel", check=False)
+    git_dir = git(runtime, "rev-parse", "--git-dir", check=False)
+    return (
+        root.returncode == 0
+        and git_dir.returncode == 0
+        and Path(root.stdout.strip()).resolve() == repository
+        and (runtime / git_dir.stdout.strip()).resolve() == repository / ".git"
+        and git(runtime, "branch", "--show-current").stdout.strip() == branch
+        and git(runtime, "merge-base", "--is-ancestor", base_commit, "HEAD", check=False).returncode == 0
+    )
 
 
 def select_repositories(
@@ -312,7 +343,7 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         git(self.repo, "checkout", "main")
         return target_head
 
-    def test_immediate_child_detection_excludes_nested_and_accepts_linked_worktree(self):
+    def test_immediate_child_detection_excludes_nested_and_linked_worktrees(self):
         workspace = Path(self.tempdir.name) / "workspace"
         workspace.mkdir()
         api = workspace / "api"
@@ -334,7 +365,30 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         git(external, "init")
         (workspace / "external-link").symlink_to(external, target_is_directory=True)
 
-        self.assertEqual(discover_repositories(workspace), ["api", "web"])
+        self.assertEqual(discover_repositories(workspace), ["api"])
+
+    def test_primary_checkout_context_rejects_linked_and_host_worktrees_before_edits(self):
+        workspace = Path(self.tempdir.name) / "workspace"
+        workspace.mkdir()
+        primary = workspace / "api"
+        primary.mkdir()
+        git(primary, "init")
+        git(primary, "config", "user.email", "test@example.com")
+        git(primary, "config", "user.name", "Test User")
+        (primary / "tracked.txt").write_text("main\n")
+        git(primary, "add", "tracked.txt")
+        git(primary, "commit", "-m", "initial")
+        git(primary, "checkout", "-b", "feature/demo")
+        base = git(primary, "rev-parse", "HEAD").stdout.strip()
+        linked = workspace / ".claude/worktrees/api"
+        linked.parent.mkdir(parents=True)
+        git(primary, "worktree", "add", str(linked), "-b", "feature/linked")
+
+        self.assertEqual(discover_repositories(workspace), ["api"])
+        self.assertTrue(validate_pre_edit_context(primary, primary, "feature/demo", base))
+        self.assertFalse(validate_pre_edit_context(linked, primary, "feature/demo", base))
+        self.assertFalse(validate_pre_edit_context(primary, primary, "main", base))
+        self.assertFalse(validate_pre_edit_context(primary, primary, "feature/demo", "0" * 40))
 
     def test_selection_precedence_boundaries_and_ambiguous_root(self):
         workspace = Path(self.tempdir.name) / "workspace"
@@ -434,6 +488,8 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
 
     def test_documentation_defines_workspace_scoped_contract(self):
         for phrase in (
+            "non-Git invocation parent is a multi-repository workspace container",
+            "preserve its exact path and basename",
             "immediate child directories",
             "explicit repository path or name",
             "current directory",
@@ -443,6 +499,12 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             "workspace-relative",
             "separate delegation",
             "selected repository as `cwd`",
+            "existing checkout only",
+            "primary checkout",
+            "linked-worktree `gitdir:` files",
+            ".claude/worktrees",
+            "actual `pwd -P`",
+            "never invoke `git worktree add`",
             "success`, `failed`, `skipped`, `rejected`, or `unavailable",
         ):
             self.assertIn(phrase, WORKFLOW)
@@ -457,7 +519,7 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             "<feature-directory>",
         ):
             self.assertIn(phrase, WORKFLOW)
-        self.assertIn("immediate-child Git repositories", README)
+        self.assertIn("immediate-child **primary** Git checkouts", README)
         self.assertIn("agentModels: {}", README)
         self.assertIn("Configure artifact storage", README)
         self.assertIn("/Users/kenviriya/Code/Claude-Brain", README)
