@@ -2,12 +2,13 @@
 
 A Claude Code plugin for delivering a feature through product definition, conditional UX, targeted implementation, QA, and independent review. Feature state and artifacts are stored in the Obsidian Vault so work can resume across sessions.
 
-It ships `feature` and `sprint` skills plus six focused agents:
+It ships `feature`, `sprint`, and `release` skills plus six focused agents:
 
 | Item | Use it for |
 | --- | --- |
 | `feature` skill | Orchestrating one feature from questions through QA and review, with durable state. |
 | `sprint` skill | Coordinating a dependency-safe backlog through isolated feature runs and a final integration gate. |
+| `release` skill | Releasing a completed sprint by default, or an explicit completed feature, with preflight and confirmation. |
 | `product-manager` | Clarifying requirements and writing a concise PRD with testable acceptance criteria. |
 | `ux-designer` | Producing a UI specification when an approved feature has a user-facing surface. |
 | `backend-engineer` | Implementing server-side, API, database, and integration work. |
@@ -72,7 +73,21 @@ Coordinate a sprint backlog with dependency-safe feature runs:
 /full-team-agile:sprint Deliver saved searches, including API, dashboard UI, and documentation.
 ```
 
-Sprint coordination persists `Sprints/<workspace-name>/<sprint-id>/` in the Obsidian Vault. It decomposes the backlog into feature-sized items, runs only dependency-safe disjoint lanes concurrently, blocks dependent work after an upstream failure, and requires a final integration gate before the sprint is done. Each item remains an isolated `feature` run under `Features/<workspace-name>/<feature-id>/`; sprint never replaces that workflow's Git, QA, review, or cleanup lifecycle.
+Sprint coordination persists `Sprints/<workspace-name>/<sprint-id>/` in the Obsidian Vault. It decomposes the backlog into feature-sized items, dispatches dependency-safe disjoint lanes as parallel `feature` workflows, blocks dependent work after an upstream failure, and requires a final integration gate before the sprint is done. Each delegated feature workflow routes its own specialized lifecycle agents; sprint never replaces that workflow's Git, QA, review, or cleanup lifecycle. Sprint writes `03-sprint-recap.md` for every terminal sprint outcome; successful integration checks are recorded in `02-integration-report.md`. A done sprint is eligible for an explicit `release` workflow; sprint itself does not merge, tag, or push.
+
+Release defaults to a completed sprint:
+
+```text
+/full-team-agile:release <sprint-id> version=1.2.3 target=main remote=origin
+```
+
+Release one completed feature only with the explicit feature form. For multi-repository work, select workspace-relative repositories explicitly (or use `repositories=all`):
+
+```text
+/full-team-agile:release feature <feature-id> version=1.2.3 target=main remote=origin repositories=apps/api,apps/web
+```
+
+A release requires an explicit SemVer version, target branch, and remote. It saves `Releases/<workspace-name>/<release-id>/` in the Obsidian Vault, preflights recorded commits and clean trees, then asks for fresh confirmation before creating release branches, merging, validating, tagging, advancing the target, and pushing the exact target branch and annotated tag. It pushes after confirmed local success by default. Package publication and GitHub Releases remain disabled unless separately requested with a repository-qualified command or policy and separately confirmed. Resume an incomplete release with `/full-team-agile:release continue <release-id>`; it revalidates state and resumes only incomplete work. Release never infers `main` or multi-repository scope, stages arbitrary work, stashes, resets, force-pushes, deletes branches or tags, or automatically rolls back.
 
 The feature workflow persists artifacts under `Features/<workspace-name>/<feature-id>/` in the Obsidian Vault. At feature start it treats the invocation root as a container and discovers only non-symlinked immediate-child Git repositories whose canonical root is that exact canonical child. It never follows child symlinks or recursively includes nested repositories. A Git repository at the container root is excluded unless the request identifies it and the user confirms it for the current session; its state path is `.`. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
 

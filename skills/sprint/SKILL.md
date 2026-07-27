@@ -11,15 +11,16 @@ When invoked as `/sprint <backlog description>` or `/sprint continue <sprint-id>
 ## Coordinator boundary
 
 1. Sprint coordinates multiple feature-sized backlog items. It does not replace `full-team-agile:feature`.
-2. Every item is delivered by one separate agent invoking `full-team-agile:feature`. That feature workflow remains the sole authority for questions, PRD, UX, implementation, testing, review, cleanup, State.md artifacts, repository selection, Git branches, and worktree safeguards.
-3. Sprint must not directly delegate implementation, QA, or review agents. It must not create, reset, switch, merge, delete, or clean up feature branches, worktrees, repositories, or feature artifacts.
-4. Feature State.md is authoritative for each item's delivery status. Sprint records only its feature ID, State.md reference, compact observed outcome, dependencies, scheduling information, and integration evidence.
+2. Every selected item is delivered by one separate agent invoking `full-team-agile:feature`. That feature workflow remains the sole authority for questions, PRD, UX, implementation, testing, review, cleanup, State.md artifacts, repository selection, Git branches, and worktree safeguards.
+3. Each delegated feature workflow routes its own product-manager, conditional UX, backend/frontend implementation, QA, and code-review agents. Sprint must not directly delegate those lifecycle agents.
+4. Sprint must not create, reset, switch, merge, delete, or clean up feature branches, worktrees, repositories, or feature artifacts. A `done` sprint may be released only through the explicit `full-team-agile:release` workflow.
+5. Feature State.md is authoritative for each item's delivery status. Sprint records only its feature ID, State.md reference, compact observed outcome, dependencies, scheduling information, and integration evidence.
 
 ## State contract
 
 1. Capture the invocation workspace root and use its basename as `<workspace-name>`.
 2. For a new sprint, generate and immediately print a unique readable `<sprint-id>` from the backlog slug, lowercase UTC timestamp, and short random suffix. Never reuse a sprint folder. For continuation, validate the exact ID against `^[a-z0-9]+(?:-+[a-z0-9]+)*$`; reject `/`, `.`, whitespace, and all other characters.
-3. Persist `Sprints/<workspace-name>/<sprint-id>/State.md` before dispatching any item. Keep `01-sprint-plan.md` and `02-integration-report.md` in the same folder.
+3. Persist `Sprints/<workspace-name>/<sprint-id>/State.md` before dispatching any item. Keep `01-sprint-plan.md`, `02-integration-report.md`, and `03-sprint-recap.md` in the same folder.
 4. State.md is authoritative for sprint coordination. Reread it before planning changes, dispatch, dependency evaluation, continuation, and the integration gate.
 5. Use versioned compact state containing `sprintId`, `stage`, `workspace`, `backlog`, `items`, `lanes`, `integration`, and `history`. Each item stores its description, feature ID, feature State.md path, status, `dependsOn`, declared ownership/resources, lane, blockers, and compact outcome.
 6. Item and sprint IDs are safe path segments. Dependencies refer only to existing item IDs. Reject self-dependencies and dependency cycles before any dispatch.
@@ -37,13 +38,16 @@ When invoked as `/sprint <backlog description>` or `/sprint continue <sprint-id>
 
 ## Delegation and status
 
-1. Before dispatching a ready item, assign and persist its feature ID.
-2. Start one separate agent per ready item. Instruct it to invoke `full-team-agile:feature` with the scoped requirement, sprint ID, item ID, `feature-id=<assigned-feature-id>`, explicit repository scope, dependencies already satisfied, and ownership/interface constraints.
-3. The delegate must follow the canonical feature workflow and use `Features/<workspace-name>/<feature-id>/State.md` as its delivery record. Sprint must not bypass its questions or write its PRD.
-4. After a delegate reaches a reportable state, reread its referenced feature State.md and record the compact observed outcome in sprint state.
-5. If an item is `failed` or `blocked`, do not dispatch a dependent item. Mark direct and transitive dependents `blocked` with the upstream item ID and reason. Continue independent ready lanes.
-6. If a feature is waiting for user answers, retain the item's `running` status; it blocks only its dependents.
-7. On continuation, retain feature IDs, refresh observed feature outcomes from their State.md files, and recompute readiness only for nonterminal items. Never recreate feature work automatically.
+1. Before dispatching, reread State.md, compute ready items, and select one pairwise-safe dispatch batch under the lane rules.
+2. Before launching the batch, assign and persist each selected item's feature ID and record its launch as pending.
+3. Launch one separate feature delegate per selected ready item in a single parallel dispatch. Instruct each delegate to invoke `full-team-agile:feature` with the scoped requirement, sprint ID, item ID, `feature-id=<assigned-feature-id>`, explicit repository scope, dependencies already satisfied, and ownership/interface constraints.
+4. Record each launch result. Mark an item `running` only after its delegate starts. If a delegate does not start or is denied before a feature State.md exists, retain its assigned feature ID, return it to `ready`, record the launch failure, and retry only that same feature assignment on a later dispatch.
+5. The delegate must follow the canonical feature workflow and use `Features/<workspace-name>/<feature-id>/State.md` as its delivery record. Sprint must not bypass its questions or write its PRD.
+6. A dispatch batch is a scheduling snapshot: items that become ready while it runs wait for the next readiness evaluation.
+7. After a delegate reaches a reportable state, reread its referenced feature State.md and record the compact observed outcome in sprint state.
+8. If an item is `failed` or `blocked`, do not dispatch a dependent item. Mark direct and transitive dependents `blocked` with the upstream item ID and reason. Continue independent ready lanes.
+9. If a feature is waiting for user answers, retain the item's `running` status; it blocks only its dependents.
+10. On continuation, retain feature IDs, refresh observed feature outcomes from their State.md files, and recompute readiness only for nonterminal items. Never recreate feature work automatically.
 
 ## Integration gate
 
@@ -56,4 +60,4 @@ When invoked as `/sprint <backlog description>` or `/sprint continue <sprint-id>
 
 ## Done
 
-On `done`, summarize every item ID, feature ID, status, blocked items, and integration evidence. List the sprint State.md, plan, integration report, and referenced feature State.md paths. State that feature branches remain under the user's control for commit, merge, and branch management.
+For every terminal sprint status (`done`, `failed`, or `blocked`), write `03-sprint-recap.md`. Include the sprint ID, workspace, final status, every item ID/feature ID/status/compact outcome, blocked items and upstream reasons, compact lane/batch results, integration status with `02-integration-report.md`, and referenced feature State.md paths. On `done`, print the same concise recap. State that feature branches remain under the user's control for commit, merge, cleanup, and branch management; never claim a passing integration gate for a non-`done` sprint.

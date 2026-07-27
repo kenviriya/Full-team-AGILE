@@ -91,6 +91,23 @@ def conflicts(left: dict[str, object], right: dict[str, object]) -> bool:
     )
 
 
+def select_dispatch_batch(items: dict[str, dict[str, object]]) -> set[str]:
+    batch = set()
+    for item_id in sorted(ready_items(items)):
+        if not any(conflicts(items[item_id], items[selected]) for selected in batch):
+            batch.add(item_id)
+    return batch
+
+
+def launch_results(items: dict[str, dict[str, object]], started: set[str]) -> None:
+    for item_id in items:
+        if item_id in started:
+            items[item_id]["status"] = "running"
+        else:
+            items[item_id]["status"] = "ready"
+            items[item_id]["launchFailure"] = "delegate did not start"
+
+
 class SprintWorkflowTests(unittest.TestCase):
     def test_dependency_validation_rejects_self_references_and_cycles(self):
         with self.assertRaisesRegex(ValueError, "invalid dependency"):
@@ -135,15 +152,64 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertTrue(conflicts(api, api_docs))
         self.assertTrue(conflicts(api, unknown))
 
-    def test_workflow_delegates_to_feature_without_reimplementing_feature_lifecycle(self):
+    def test_dispatch_batch_includes_only_ready_nonconflicting_items(self):
+        items = {
+            "api": {
+                "dependsOn": [],
+                "status": "planned",
+                "repository": "api",
+                "resources": {("contract", "saved-searches")},
+            },
+            "docs": {
+                "dependsOn": [],
+                "status": "planned",
+                "repository": "docs",
+                "resources": {("path", "docs/searches.md")},
+            },
+            "web": {
+                "dependsOn": [],
+                "status": "planned",
+                "repository": "web",
+                "resources": {("contract", "saved-searches")},
+            },
+            "follow-up": {
+                "dependsOn": ["api"],
+                "status": "planned",
+                "repository": "e2e",
+                "resources": {("path", "tests/e2e")},
+            },
+        }
+
+        self.assertEqual(select_dispatch_batch(items), {"api", "docs"})
+
+    def test_failed_batch_launch_preserves_feature_id_and_returns_item_to_ready(self):
+        items = {
+            "api": {"status": "ready", "featureId": "api--20260727t000000z--a1b2c3d4"},
+            "docs": {"status": "ready", "featureId": "docs--20260727t000000z--d4c3b2a1"},
+        }
+
+        launch_results(items, {"api"})
+
+        self.assertEqual(items["api"]["status"], "running")
+        self.assertEqual(items["docs"]["status"], "ready")
+        self.assertEqual(items["docs"]["featureId"], "docs--20260727t000000z--d4c3b2a1")
+        self.assertEqual(items["docs"]["launchFailure"], "delegate did not start")
+
+    def test_workflow_delegates_parallel_feature_batches_without_reimplementing_feature_lifecycle(self):
         self.assertTrue((ROOT / "skills/sprint/SKILL.md").is_file())
         self.assertIn("name: sprint", WORKFLOW)
         self.assertIn("full-team-agile:feature", WORKFLOW)
-        self.assertIn("one separate agent per ready item", WORKFLOW)
+        self.assertIn("single parallel dispatch", WORKFLOW)
+        self.assertIn("one separate feature delegate per selected ready item", WORKFLOW)
+        self.assertIn("assign and persist each selected item's feature ID and record its launch as pending", WORKFLOW)
+        self.assertIn("Mark an item `running` only after its delegate starts", WORKFLOW)
+        self.assertIn("retry only that same feature assignment on a later dispatch", WORKFLOW)
         self.assertIn("feature-id=<assigned-feature-id>", WORKFLOW)
         self.assertIn("Feature State.md is authoritative", WORKFLOW)
-        self.assertIn("Sprint must not directly delegate implementation, QA, or review agents", WORKFLOW)
+        self.assertIn("product-manager, conditional UX, backend/frontend implementation, QA, and code-review agents", WORKFLOW)
+        self.assertIn("Sprint must not directly delegate those lifecycle agents", WORKFLOW)
         self.assertIn("must not create, reset, switch, merge, delete, or clean up feature branches", WORKFLOW)
+        self.assertIn("done` sprint may be released only through the explicit `full-team-agile:release` workflow", WORKFLOW)
         self.assertNotIn("- **questions:**", WORKFLOW)
         self.assertNotIn("- **implementation:**", WORKFLOW)
         self.assertNotIn("- **cleanup:**", WORKFLOW)
@@ -152,14 +218,19 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertIn("Sprints/<workspace-name>/<sprint-id>/State.md", WORKFLOW)
         self.assertIn("Features/<workspace-name>/<feature-id>/State.md", WORKFLOW)
         self.assertIn("02-integration-report.md", WORKFLOW)
+        self.assertIn("03-sprint-recap.md", WORKFLOW)
+        self.assertIn("For every terminal sprint status (`done`, `failed`, or `blocked`)", WORKFLOW)
         self.assertIn("only when every item is `done`", WORKFLOW)
         self.assertIn("passing QA and approved review evidence", WORKFLOW)
+        self.assertIn("never claim a passing integration gate for a non-`done` sprint", WORKFLOW)
         self.assertIn("do not automatically roll back, reopen, merge, reset, delete, or clean up", WORKFLOW)
 
     def test_readme_advertises_the_sprint_workflow(self):
         self.assertIn("`sprint` skill", README)
         self.assertIn("/full-team-agile:sprint", README)
         self.assertIn("Sprints/<workspace-name>/<sprint-id>/", README)
+        self.assertIn("parallel `feature` workflows", README)
+        self.assertIn("03-sprint-recap.md", README)
         self.assertIn("integration gate", README)
 
 

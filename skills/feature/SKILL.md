@@ -118,4 +118,4 @@ Run backend/frontend lanes in parallel only with disjoint ownership and no share
 
 ## Done
 
-On `done`, summarize what was built and list State.md's artifact paths plus every selected workspace-relative repository path, root, branch, base commit, and cleanup outcome in deterministic order. State that the feature folder is the audit trail and commit, merge, and integration remain the user's responsibility. If optional branch deletion was not requested for a repository, say its branch was retained.
+On `done`, summarize what was built and list State.md's artifact paths plus every selected workspace-relative repository path, root, branch, base commit, and cleanup outcome in deterministic order. State that the feature folder is the audit trail and commit, merge, and integration remain the user's responsibility; an explicit feature release, when wanted, uses `full-team-agile:release feature <feature-id>`. If optional branch deletion was not requested for a repository, say its branch was retained.

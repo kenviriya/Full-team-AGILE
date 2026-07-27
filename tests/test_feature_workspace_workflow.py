@@ -902,6 +902,7 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         self.assertIn("git branch -d <feature-branch>", WORKFLOW)
         self.assertIn("Remote deletion is separately optional", WORKFLOW)
         self.assertIn("local-deletion confirmation never authorizes it", WORKFLOW)
+        self.assertIn("full-team-agile:release feature <feature-id>", WORKFLOW)
         self.assertIn("only explicitly tracked temporary artifacts are removed", README)
         self.assertNotIn("worktree cleanup", WORKFLOW)
         self.assertNotIn("worktree cleanup", README)
