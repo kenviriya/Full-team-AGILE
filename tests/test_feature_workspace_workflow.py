@@ -894,6 +894,8 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         self.assertIn("will discard commits on that branch", WORKFLOW)
         self.assertIn("Never stash, discard, reset, or force checkout automatically", WORKFLOW)
         self.assertIn("target already exists and the tree is dirty, it blocks before checkout", README)
+        self.assertIn("A coordinator may supply an unused `feature-id=<feature-id>`", WORKFLOW)
+        self.assertIn("reject an existing folder", WORKFLOW)
         self.assertNotIn("non-forced `git checkout feature/<feature-id>`", WORKFLOW)
         self.assertIn("temporaryArtifacts", WORKFLOW)
         self.assertIn("Run immediately before the final completion response", WORKFLOW)

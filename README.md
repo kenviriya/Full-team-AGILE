@@ -2,11 +2,12 @@
 
 A Claude Code plugin for delivering a feature through product definition, conditional UX, targeted implementation, QA, and independent review. Feature state and artifacts are stored in the Obsidian Vault so work can resume across sessions.
 
-It ships one `feature` skill and six focused agents:
+It ships `feature` and `sprint` skills plus six focused agents:
 
 | Item | Use it for |
 | --- | --- |
-| `feature` skill | Orchestrating a feature from questions through QA and review, with durable state. |
+| `feature` skill | Orchestrating one feature from questions through QA and review, with durable state. |
+| `sprint` skill | Coordinating a dependency-safe backlog through isolated feature runs and a final integration gate. |
 | `product-manager` | Clarifying requirements and writing a concise PRD with testable acceptance criteria. |
 | `ux-designer` | Producing a UI specification when an approved feature has a user-facing surface. |
 | `backend-engineer` | Implementing server-side, API, database, and integration work. |
@@ -65,7 +66,15 @@ Invoke the installed skill directly:
 /full-team-agile:feature Add saved searches to the dashboard.
 ```
 
-The workflow persists artifacts under `Features/<workspace-name>/<feature-id>/` in the Obsidian Vault. At feature start it treats the invocation root as a container and discovers only non-symlinked immediate-child Git repositories whose canonical root is that exact canonical child. It never follows child symlinks or recursively includes nested repositories. A Git repository at the container root is excluded unless the request identifies it and the user confirms it for the current session; its state path is `.`. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
+Coordinate a sprint backlog with dependency-safe feature runs:
+
+```text
+/full-team-agile:sprint Deliver saved searches, including API, dashboard UI, and documentation.
+```
+
+Sprint coordination persists `Sprints/<workspace-name>/<sprint-id>/` in the Obsidian Vault. It decomposes the backlog into feature-sized items, runs only dependency-safe disjoint lanes concurrently, blocks dependent work after an upstream failure, and requires a final integration gate before the sprint is done. Each item remains an isolated `feature` run under `Features/<workspace-name>/<feature-id>/`; sprint never replaces that workflow's Git, QA, review, or cleanup lifecycle.
+
+The feature workflow persists artifacts under `Features/<workspace-name>/<feature-id>/` in the Obsidian Vault. At feature start it treats the invocation root as a container and discovers only non-symlinked immediate-child Git repositories whose canonical root is that exact canonical child. It never follows child symlinks or recursively includes nested repositories. A Git repository at the container root is excluded unless the request identifies it and the user confirms it for the current session; its state path is `.`. New runs generate and print a readable unique feature ID (for example, `saved-searches--20260721t153045z--a1b2c3d4`):
 
 1. Product manager asks focused questions and writes `01-prd.md`.
 2. UX writes `02-ui-spec.md` only when the PRD changes a user-facing surface.
