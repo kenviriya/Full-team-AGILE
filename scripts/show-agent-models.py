@@ -130,11 +130,44 @@ def prompt_metadata(prompt):
     return document, METADATA_RE.sub("\n", prompt or "").strip()
 
 
+def delegation_repository(metadata):
+    value = metadata.get("repository")
+    if not isinstance(value, str) or not value.strip():
+        if value not in (None, ""):
+            warn("delegation repository", None, value)
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        warn("delegation repository", None, value)
+        return None
+    try:
+        canonical = path.resolve(strict=True)
+    except OSError as error:
+        warn("delegation repository", None, str(error))
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(canonical), "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        warn("delegation repository", None, str(error))
+        return None
+    root = Path(result.stdout.strip()).resolve()
+    if root != canonical:
+        warn("delegation repository", None, value)
+        return None
+    return root
+
+
 def candidates(agent, metadata, root, plugin_root, user_value):
+    repository = repository_mapping(root) if root is not None else {}
     scopes = (
         ("invocation", mapping("invocation", metadata.get("invocation"))),
         ("feature", mapping("feature", metadata.get("feature"))),
-        ("repository", repository_mapping(root)),
+        ("repository", repository),
         ("user/global", mapping("user/global", user_value)),
         ("bundled", bundled_defaults(plugin_root)),
     )
@@ -161,7 +194,7 @@ def pre_tool_use(event, plugin_root, user_value):
     scope, model = selected_model(
         agent,
         metadata,
-        repository_root(event.get("cwd", ".")),
+        delegation_repository(metadata),
         plugin_root,
         user_value,
     )

@@ -71,11 +71,13 @@ def block_dependents(items: dict[str, dict[str, object]], failed_item: str) -> s
 
 
 def conflicts(left: dict[str, object], right: dict[str, object]) -> bool:
-    if left["repository"] == right["repository"]:
-        return True
     left_resources = left["resources"]
     right_resources = right["resources"]
     if left_resources is None or right_resources is None:
+        return True
+    if left["repository"] == right["repository"] and not (
+        left.get("isolatedWorktree") and right.get("isolatedWorktree")
+    ):
         return True
     return bool(
         {
@@ -145,11 +147,22 @@ class SprintWorkflowTests(unittest.TestCase):
         docs = {"repository": "docs", "resources": {("path", "docs/searches.md")}}
         web = {"repository": "web", "resources": {("contract", "saved-searches")}}
         api_docs = {"repository": "api", "resources": {("path", "docs/searches.md")}}
+        api_isolated = {
+            "repository": "api",
+            "resources": {("path", "api/searches.md")},
+            "isolatedWorktree": True,
+        }
+        api_isolated_peer = {
+            "repository": "api",
+            "resources": {("path", "api/other.md")},
+            "isolatedWorktree": True,
+        }
         unknown = {"repository": "docs", "resources": None}
 
         self.assertFalse(conflicts(api, docs))
         self.assertTrue(conflicts(api, web))
         self.assertTrue(conflicts(api, api_docs))
+        self.assertFalse(conflicts(api_isolated, api_isolated_peer))
         self.assertTrue(conflicts(api, unknown))
 
     def test_dispatch_batch_includes_only_ready_nonconflicting_items(self):
@@ -202,9 +215,9 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertIn("non-Git invocation parent is a multi-repository workspace container", WORKFLOW)
         self.assertIn("preserve its exact root and basename", WORKFLOW)
         self.assertIn("Sprint must not independently scan or infer child repositories", WORKFLOW)
-        self.assertIn("selected repository's existing primary checkout", WORKFLOW)
-        self.assertIn("existing primary checkout", WORKFLOW)
-        self.assertIn("primary-checkout validation", WORKFLOW)
+        self.assertIn("worktree safeguards", WORKFLOW)
+        self.assertIn("distinct valid plugin-owned worktrees", WORKFLOW)
+        self.assertIn("Same-repository items", WORKFLOW)
         self.assertIn("create a fallback checkout", WORKFLOW)
         self.assertIn("Pass that preserved workspace context and each item's explicit workspace-relative repository scope", WORKFLOW)
         self.assertIn("sprint must not imply all child repositories", WORKFLOW)
@@ -215,7 +228,7 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertIn("retry only that same feature assignment on a later dispatch", WORKFLOW)
         self.assertIn("feature-id=<assigned-feature-id>", WORKFLOW)
         self.assertIn("Feature State.md is authoritative", WORKFLOW)
-        self.assertIn("linked-worktree or actual-cwd mismatch", WORKFLOW)
+        self.assertIn("linked-worktree or recorded-runtime mismatch", WORKFLOW)
         self.assertIn("must not create, select, repair, or retry another checkout automatically", WORKFLOW)
         self.assertIn("product-manager, conditional UX, backend/frontend implementation, QA, and code-review agents", WORKFLOW)
         self.assertIn("Sprint must not directly delegate those lifecycle agents", WORKFLOW)

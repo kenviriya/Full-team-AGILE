@@ -44,22 +44,41 @@ def discover_repositories(workspace: Path) -> list[str]:
 
 
 def validate_pre_edit_context(
-    runtime: Path, repository: Path, branch: str, base_commit: str
+    runtime: Path,
+    repository: Path,
+    branch: str,
+    base_commit: str,
+    *,
+    inherited_cwd: Path | None = None,
 ) -> bool:
     runtime = runtime.resolve()
     repository = repository.resolve()
-    if runtime != repository or not (repository / ".git").is_dir():
+    if not (repository / ".git").is_dir():
         return False
+    if runtime != repository:
+        plugin_root = repository.parent / ".full-team-agile/worktrees" / repository.name
+        if plugin_root.resolve() not in runtime.parents or runtime not in registered_worktree_paths(repository):
+            return False
     root = git(runtime, "rev-parse", "--show-toplevel", check=False)
-    git_dir = git(runtime, "rev-parse", "--git-dir", check=False)
+    common_dir = git(runtime, "rev-parse", "--git-common-dir", check=False)
     return (
         root.returncode == 0
-        and git_dir.returncode == 0
-        and Path(root.stdout.strip()).resolve() == repository
-        and (runtime / git_dir.stdout.strip()).resolve() == repository / ".git"
+        and common_dir.returncode == 0
+        and Path(root.stdout.strip()).resolve() == runtime
+        and (runtime / common_dir.stdout.strip()).resolve() == repository / ".git"
         and git(runtime, "branch", "--show-current").stdout.strip() == branch
         and git(runtime, "merge-base", "--is-ancestor", base_commit, "HEAD", check=False).returncode == 0
     )
+
+
+def runtime_target(runtime: Path, target: Path) -> Path | None:
+    runtime = runtime.resolve()
+    try:
+        canonical = target.resolve()
+        canonical.relative_to(runtime)
+    except (OSError, ValueError):
+        return None
+    return canonical
 
 
 def select_repositories(
@@ -137,6 +156,61 @@ def branch_is_occupied(repo: Path, branch: str) -> bool:
         elif line == f"branch refs/heads/{branch}" and current_worktree != repo.resolve():
             return True
     return False
+
+
+def plugin_worktree_path(repo: Path, feature_id: str) -> Path:
+    return repo.parent / ".full-team-agile/worktrees" / repo.name / feature_id
+
+
+def worktree_for(repo: Path, feature_id: str, metadata: dict[str, object] | None = None) -> tuple[str, dict[str, object] | None]:
+    branch = f"feature/{feature_id}"
+    path = plugin_worktree_path(repo, feature_id).resolve()
+    expected = {"path": str(path), "branch": branch, "pluginOwned": True}
+    registered = registered_worktree_paths(repo)
+    if metadata is not None:
+        if metadata != expected or path not in registered or git(path, "branch", "--show-current").stdout.strip() != branch:
+            return "blocked-mismatch", None
+        return "continued", metadata
+    if git(repo, "status", "--porcelain").stdout:
+        return "blocked-dirty", None
+    if path.exists() or path in registered:
+        return "blocked-path-collision", None
+    if git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}", check=False).returncode == 0:
+        return "blocked-branch-collision", None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    result = git(repo, "worktree", "add", "-b", branch, str(path), "HEAD", check=False)
+    return ("created", expected) if result.returncode == 0 else ("blocked-create", None)
+
+
+def remove_plugin_worktree(
+    repo: Path,
+    feature_id: str,
+    metadata: dict[str, object],
+    *,
+    phase: str,
+    reviews_complete: bool,
+    status: str,
+) -> str:
+    branch = f"feature/{feature_id}"
+    path = plugin_worktree_path(repo, feature_id).resolve()
+    expected = {"path": str(path), "branch": branch, "pluginOwned": True}
+    if phase != "cleanup":
+        return "skipped-pre-cleanup"
+    if not reviews_complete:
+        return "skipped-incomplete-review"
+    if status in {"active", "blocked", "failed", "awaiting-input"}:
+        return f"skipped-{status}"
+    if metadata.get("pluginOwned") is not True:
+        return "skipped-external"
+    if metadata != expected or path not in registered_worktree_paths(repo):
+        return "skipped-mismatch"
+    if git(path, "status", "--porcelain").stdout:
+        return "skipped-dirty"
+    result = git(repo, "worktree", "remove", str(path), check=False)
+    if result.returncode:
+        return "blocked-remove"
+    prune = git(repo, "worktree", "prune", check=False)
+    return "removed-pruned" if prune.returncode == 0 else "blocked-prune"
 
 
 def create_or_reset_target(
@@ -390,6 +464,44 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         self.assertFalse(validate_pre_edit_context(primary, primary, "main", base))
         self.assertFalse(validate_pre_edit_context(primary, primary, "feature/demo", "0" * 40))
 
+    def test_parent_container_cwd_uses_recorded_worktree_and_rejects_sibling_escapes(self):
+        workspace = Path(self.tempdir.name) / "workspace"
+        api = workspace / "api"
+        web = workspace / "web"
+        for repo in (api, web):
+            repo.mkdir(parents=True)
+            git(repo, "init")
+            git(repo, "config", "user.email", "test@example.com")
+            git(repo, "config", "user.name", "Test User")
+            (repo / "tracked.txt").write_text(f"{repo.name}\n")
+            git(repo, "add", "tracked.txt")
+            git(repo, "commit", "-m", "initial")
+        base = git(api, "rev-parse", "HEAD").stdout.strip()
+        status, metadata = worktree_for(api, "parent-cwd")
+        runtime = Path(metadata["path"])
+
+        self.assertEqual(status, "created")
+        self.assertTrue(
+            validate_pre_edit_context(
+                runtime,
+                api,
+                metadata["branch"],
+                base,
+                inherited_cwd=workspace,
+            )
+        )
+        selected = runtime_target(runtime, runtime / "selected.txt")
+        self.assertEqual(selected, runtime / "selected.txt")
+        selected.write_text("selected only\n")
+        self.assertIsNone(runtime_target(runtime, runtime / ".." / ".." / ".." / "web" / "sibling.txt"))
+        self.assertIsNone(runtime_target(runtime, web / "sibling.txt"))
+        external = workspace / "external.txt"
+        external.write_text("external\n")
+        (runtime / "external-link").symlink_to(external)
+        self.assertIsNone(runtime_target(runtime, runtime / "external-link"))
+        self.assertFalse((web / "sibling.txt").exists())
+        self.assertEqual(external.read_text(), "external\n")
+
     def test_selection_precedence_boundaries_and_ambiguous_root(self):
         workspace = Path(self.tempdir.name) / "workspace"
         api = workspace / "api"
@@ -483,8 +595,29 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         self.assertEqual(results, {"api": "created", "web": "created"})
         self.assertEqual(cleanup_temporary_artifacts(api, [artifact("tmp.txt")]), ["removed"])
         self.assertTrue((web / "tmp.txt").exists())
-        self.assertEqual(git(api, "branch", "--show-current").stdout.strip(), "feature/demo")
-        self.assertEqual(git(web, "branch", "--show-current").stdout.strip(), "feature/demo")
+        (web / "tmp.txt").unlink()
+        repository_statuses = {
+            "api": "done",
+            "web": "active",
+        }
+        api_status, api_metadata = worktree_for(api, "isolated")
+        web_status, web_metadata = worktree_for(web, "isolated")
+        self.assertEqual((api_status, web_status), ("created", "created"))
+        self.assertEqual(
+            remove_plugin_worktree(
+                api, "isolated", api_metadata, phase="cleanup", reviews_complete=True, status=repository_statuses["api"]
+            ),
+            "removed-pruned",
+        )
+        for sibling_status in ("active", "blocked", "failed", "awaiting-input"):
+            repository_statuses["web"] = sibling_status
+            self.assertEqual(
+                remove_plugin_worktree(
+                    web, "isolated", web_metadata, phase="cleanup", reviews_complete=True, status=repository_statuses["web"]
+                ),
+                f"skipped-{sibling_status}",
+            )
+            self.assertIn(Path(web_metadata["path"]), registered_worktree_paths(web))
 
     def test_documentation_defines_workspace_scoped_contract(self):
         for phrase in (
@@ -498,13 +631,11 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             "session-scoped confirmation",
             "workspace-relative",
             "separate delegation",
-            "selected repository as `cwd`",
-            "existing checkout only",
-            "primary checkout",
-            "linked-worktree `gitdir:` files",
-            ".claude/worktrees",
-            "actual `pwd -P`",
-            "never invoke `git worktree add`",
+            "validated recorded runtime",
+            "plugin-owned worktree",
+            "git -C <primary-checkout> worktree add",
+            "inherited Agent cwd",
+            "git -C <recorded-runtime>",
             "success`, `failed`, `skipped`, `rejected`, or `unavailable",
         ):
             self.assertIn(phrase, WORKFLOW)
@@ -523,6 +654,78 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         self.assertIn("agentModels: {}", README)
         self.assertIn("Configure artifact storage", README)
         self.assertIn("/Users/kenviriya/Code/Claude-Brain", README)
+
+    def test_version_three_primary_checkout_record_remains_usable_until_worktree_creation(self):
+        v3_workspace = {
+            "root": str(self.repo),
+            "branch": "feature/demo",
+            "baseCommit": git(self.repo, "rev-parse", "HEAD").stdout.strip(),
+            "returnBranch": "main",
+            "branchCreatedByPlugin": True,
+        }
+
+        self.assertTrue(
+            validate_pre_edit_context(
+                self.repo, self.repo, v3_workspace["branch"], v3_workspace["baseCommit"]
+            ) is False
+        )
+        git(self.repo, "checkout", "-b", v3_workspace["branch"])
+        self.assertTrue(
+            validate_pre_edit_context(
+                self.repo, self.repo, v3_workspace["branch"], v3_workspace["baseCommit"]
+            )
+        )
+        self.assertNotIn("worktree", v3_workspace)
+
+        first_status, first = worktree_for(self.repo, "first")
+        second_status, second = worktree_for(self.repo, "second")
+
+        self.assertEqual(first_status, "created")
+        self.assertEqual(second_status, "created")
+        self.assertNotEqual(first["path"], second["path"])
+        self.assertEqual(worktree_for(self.repo, "first", first), ("continued", first))
+        self.assertEqual(
+            remove_plugin_worktree(
+                self.repo,
+                "first",
+                first,
+                phase="review",
+                reviews_complete=True,
+                status="done",
+            ),
+            "skipped-pre-cleanup",
+        )
+        self.assertEqual(
+            remove_plugin_worktree(
+                self.repo,
+                "first",
+                first,
+                phase="cleanup",
+                reviews_complete=False,
+                status="done",
+            ),
+            "skipped-incomplete-review",
+        )
+        self.assertIn(Path(first["path"]), registered_worktree_paths(self.repo))
+        self.assertEqual(remove_plugin_worktree(self.repo, "first", first, phase="cleanup", reviews_complete=True, status="done"), "removed-pruned")
+        self.assertEqual(git(self.repo, "rev-parse", "--verify", "feature/first").returncode, 0)
+        self.assertEqual(remove_plugin_worktree(self.repo, "second", second, phase="cleanup", reviews_complete=True, status="active"), "skipped-active")
+        self.assertEqual(remove_plugin_worktree(self.repo, "second", second, phase="cleanup", reviews_complete=True, status="blocked"), "skipped-blocked")
+        self.assertEqual(remove_plugin_worktree(self.repo, "second", second, phase="cleanup", reviews_complete=True, status="failed"), "skipped-failed")
+        self.assertEqual(remove_plugin_worktree(self.repo, "second", second, phase="cleanup", reviews_complete=True, status="awaiting-input"), "skipped-awaiting-input")
+        self.assertIn(Path(second["path"]), registered_worktree_paths(self.repo))
+
+    def test_plugin_worktree_blocks_collisions_mismatches_and_dirty_cleanup(self):
+        status, metadata = worktree_for(self.repo, "demo")
+
+        self.assertEqual(status, "created")
+        self.assertEqual(worktree_for(self.repo, "demo"), ("blocked-path-collision", None))
+        self.assertEqual(remove_plugin_worktree(self.repo, "demo", {**metadata, "pluginOwned": False}, phase="cleanup", reviews_complete=True, status="done"), "skipped-external")
+        self.assertEqual(remove_plugin_worktree(self.repo, "demo", {**metadata, "branch": "feature/other"}, phase="cleanup", reviews_complete=True, status="done"), "skipped-mismatch")
+        path = Path(metadata["path"])
+        (path / "local.txt").write_text("dirty\n")
+        self.assertEqual(remove_plugin_worktree(self.repo, "demo", metadata, phase="cleanup", reviews_complete=True, status="done"), "skipped-dirty")
+        self.assertIn(path, registered_worktree_paths(self.repo))
 
     def test_clean_creation_uses_current_checkout_without_worktree_registration(self):
         before = registered_worktree_paths(self.repo)
@@ -961,26 +1164,26 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(git(self.repo, "branch", "--show-current").stdout.strip(), "main")
 
-    def test_documentation_blocks_dirty_existing_targets_before_checkout(self):
-        self.assertIn("git worktree list --porcelain", WORKFLOW)
-        self.assertIn("if the tree is dirty, block before checkout", WORKFLOW)
-        self.assertIn("clean or stash manually, then rerun", WORKFLOW)
-        self.assertIn("separate explicit destructive-reset confirmation", WORKFLOW)
-        self.assertIn("will discard commits on that branch", WORKFLOW)
-        self.assertIn("Never stash, discard, reset, or force checkout automatically", WORKFLOW)
-        self.assertIn("target already exists and the tree is dirty, it blocks before checkout", README)
-        self.assertIn("A coordinator may supply an unused `feature-id=<feature-id>`", WORKFLOW)
-        self.assertIn("reject an existing folder", WORKFLOW)
-        self.assertNotIn("non-forced `git checkout feature/<feature-id>`", WORKFLOW)
-        self.assertIn("temporaryArtifacts", WORKFLOW)
-        self.assertIn("Run immediately before the final completion response", WORKFLOW)
-        self.assertIn("git branch -d <feature-branch>", WORKFLOW)
-        self.assertIn("Remote deletion is separately optional", WORKFLOW)
-        self.assertIn("local-deletion confirmation never authorizes it", WORKFLOW)
-        self.assertIn("full-team-agile:release feature <feature-id>", WORKFLOW)
-        self.assertIn("only explicitly tracked temporary artifacts are removed", README)
-        self.assertNotIn("worktree cleanup", WORKFLOW)
-        self.assertNotIn("worktree cleanup", README)
+    def test_documentation_defines_worktree_creation_and_safe_cleanup(self):
+        for phrase in (
+            "version 4",
+            "plugin-owned worktree",
+            ".full-team-agile/worktrees/<repository-name>/<feature-id>",
+            "git -C <primary-checkout> worktree add -b <feature-branch>",
+            "Version-3 primary-checkout workspaces remain valid",
+            "recorded runtime path",
+            "Distinct feature IDs may make concurrent source edits",
+            "git -C <primary-root> worktree remove <worktree-path>",
+            "git -C <primary-root> worktree prune",
+            "This never deletes the feature branch",
+            "separate optional branch-deletion confirmation",
+        ):
+            self.assertIn(phrase, WORKFLOW)
+        self.assertIn("State.md schema v4", README)
+        self.assertIn("plugin-owned Git worktree", README)
+        self.assertIn("same-repository", README)
+
+
 
 
 if __name__ == "__main__":

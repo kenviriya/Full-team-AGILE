@@ -86,22 +86,57 @@ with tempfile.TemporaryDirectory() as directory:
         subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
         (repo / ".claude/full-team-agile.json").write_text(json.dumps(document))
     event = {
+        "cwd": str(workspace),
         "tool_name": "Agent",
         "tool_input": {
             "subagent_type": "full-team-agile:backend-engineer",
             "prompt": "Implement the feature.",
         },
     }
-    api_output = MODELS.pre_tool_use({**event, "cwd": str(api)}, ROOT, "{}")
-    web_output = MODELS.pre_tool_use({**event, "cwd": str(web)}, ROOT, "{}")
+
+    def scoped(repo):
+        return {
+            **event,
+            "tool_input": {
+                **event["tool_input"],
+                "prompt": (
+                    "Implement the feature.\n"
+                    f'<!-- full-team-agile-agent-models: {{"repository":{json.dumps(str(repo.resolve()))}}} -->'
+                ),
+            },
+        }
+
+    api_output = MODELS.pre_tool_use(scoped(api), ROOT, "{}")
+    web_output = MODELS.pre_tool_use({**scoped(web), "cwd": str(api)}, ROOT, "{}")
     assert api_output["hookSpecificOutput"]["updatedInput"]["model"] == "haiku"
     assert web_output["hookSpecificOutput"]["updatedInput"]["model"] == "sonnet"
+    assert "full-team-agile-agent-models" not in api_output["hookSpecificOutput"]["updatedInput"]["prompt"]
+    assert "full-team-agile-agent-models" not in web_output["hookSpecificOutput"]["updatedInput"]["prompt"]
 
     empty_config = api / ".claude/full-team-agile.json"
     empty_config.write_text('{"agentModels": {}}')
-    fallback = MODELS.pre_tool_use({**event, "cwd": str(api)}, ROOT, '{"backend-engineer":"fable"}')
+    fallback = MODELS.pre_tool_use(scoped(api), ROOT, '{"backend-engineer":"fable"}')
     assert fallback["hookSpecificOutput"]["updatedInput"]["model"] == "fable"
     assert json.loads(empty_config.read_text())["agentModels"] == {}
+
+    warnings = io.StringIO()
+    with contextlib.redirect_stderr(warnings):
+        invalid = MODELS.pre_tool_use(
+            {
+                **event,
+                "tool_input": {
+                    **event["tool_input"],
+                    "prompt": (
+                        "Implement the feature.\n"
+                        '<!-- full-team-agile-agent-models: {"repository":"relative/path"} -->'
+                    ),
+                },
+            },
+            ROOT,
+            '{"backend-engineer":"haiku"}',
+        )
+    assert invalid["hookSpecificOutput"]["updatedInput"]["model"] == "haiku"
+    assert "delegation repository" in warnings.getvalue()
 
 output = io.StringIO()
 with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(output):
