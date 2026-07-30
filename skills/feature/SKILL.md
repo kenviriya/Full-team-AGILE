@@ -8,6 +8,8 @@ license: MIT
 
 When invoked as `/feature <description>` or `/feature continue <feature-id>`:
 
+Invocation arguments: $ARGUMENTS
+
 ## State contract
 
 1. Capture the invocation workspace root before repository discovery. A non-Git invocation parent is a multi-repository workspace container; preserve its exact path and basename as `<workspace-name>`, and never replace either with a selected child repository root or name. Sprint delegates use this preserved workspace context and this workflow's scoped selection rules. Durable artifacts use Obsidian MCP vault tools only, never project-relative filesystem operations. The resolved feature directory is `<artifact-root>/Features/<workspace-name>/<feature-id>/` (omit the prefix and slash when `artifact_root` is empty). `<artifact-root>` is the validated vault-relative parent announced at session start; it is never an OS path. Git workspaces are only for source, tests, policy, and Git lifecycle work.

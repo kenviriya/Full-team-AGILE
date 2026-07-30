@@ -94,7 +94,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_documentation_and_manifest_versions_advertise_release(self):
         self.assertIn("`release` skill", README)
         self.assertIn("/full-team-agile:release", README)
-        self.assertEqual(CLAUDE_PLUGIN["version"], "0.4.4")
+        self.assertEqual(CLAUDE_PLUGIN["version"], "0.4.5")
         self.assertEqual(CLAUDE_PLUGIN["version"], CODEX_PLUGIN["version"])
 
 
