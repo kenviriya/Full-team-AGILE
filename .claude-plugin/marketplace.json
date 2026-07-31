@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "full-team-agile",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A stateful feature and sprint delivery team for Claude Code: product, UX, implementation, QA, review, and integration.",
   "owner": {
     "name": "Ken Viriya",

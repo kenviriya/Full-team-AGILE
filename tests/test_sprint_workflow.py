@@ -77,13 +77,14 @@ def repository_scope(item: dict[str, object]) -> set[str]:
     return {item["repository"]}
 
 
-def conflicts(left: dict[str, object], right: dict[str, object]) -> bool:
+def conflicts(left: dict[str, object], right: dict[str, object], execution_mode: str = "worktree") -> bool:
     left_resources = left["resources"]
     right_resources = right["resources"]
     if left_resources is None or right_resources is None:
         return True
-    if repository_scope(left) & repository_scope(right) and not (
-        left.get("isolatedWorktree") and right.get("isolatedWorktree")
+    shared_repositories = repository_scope(left) & repository_scope(right)
+    if shared_repositories and (
+        execution_mode == "branch" or not (left.get("isolatedWorktree") and right.get("isolatedWorktree"))
     ):
         return True
     return bool(
@@ -100,10 +101,10 @@ def conflicts(left: dict[str, object], right: dict[str, object]) -> bool:
     )
 
 
-def select_dispatch_batch(items: dict[str, dict[str, object]]) -> set[str]:
+def select_dispatch_batch(items: dict[str, dict[str, object]], execution_mode: str = "worktree") -> set[str]:
     batch = set()
     for item_id in sorted(ready_items(items)):
-        if not any(conflicts(items[item_id], items[selected]) for selected in batch):
+        if not any(conflicts(items[item_id], items[selected], execution_mode) for selected in batch):
             batch.add(item_id)
     return batch
 
@@ -196,6 +197,7 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertTrue(conflicts(api, web))
         self.assertTrue(conflicts(api, api_docs))
         self.assertFalse(conflicts(api_isolated, api_isolated_peer))
+        self.assertTrue(conflicts(api_isolated, api_isolated_peer, "branch"))
         self.assertFalse(conflicts(multi_repo, multi_repo_peer))
         self.assertTrue(conflicts(api, unknown))
 
@@ -228,6 +230,27 @@ class SprintWorkflowTests(unittest.TestCase):
         }
 
         self.assertEqual(select_dispatch_batch(items), {"api", "docs"})
+
+    def test_branch_mode_dispatch_serializes_overlapping_repository_scopes(self):
+        items = {
+            "api-a": {
+                "dependsOn": [],
+                "status": "planned",
+                "repository": "api",
+                "resources": {("path", "api/a.py")},
+                "isolatedWorktree": True,
+            },
+            "api-b": {
+                "dependsOn": [],
+                "status": "planned",
+                "repository": "api",
+                "resources": {("path", "api/b.py")},
+                "isolatedWorktree": True,
+            },
+        }
+
+        self.assertEqual(select_dispatch_batch(items, "worktree"), {"api-a", "api-b"})
+        self.assertEqual(select_dispatch_batch(items, "branch"), {"api-a"})
 
     def test_failed_batch_launch_preserves_feature_id_and_returns_item_to_ready(self):
         items = {
@@ -270,7 +293,7 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertIn("never default to all children or the most likely repository", WORKFLOW)
         self.assertIn("worktree safeguards", WORKFLOW)
         self.assertIn("distinct valid plugin-owned worktrees", WORKFLOW)
-        self.assertIn("Any shared repository or unknown scope conflicts", WORKFLOW)
+        self.assertIn("shared repository without that isolation conflicts", WORKFLOW)
         self.assertIn("create a fallback checkout", WORKFLOW)
         self.assertIn("explicit workspace-relative `repositoryScope`", WORKFLOW)
         self.assertIn("untrusted selection request", WORKFLOW)

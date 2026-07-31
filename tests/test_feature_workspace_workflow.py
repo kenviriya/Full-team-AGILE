@@ -127,11 +127,57 @@ def migrate_execution_mode(state: dict[str, object], explicit: str | None = None
     """Persist a safe legacy mode before validating the invocation mode."""
     mode = state.get("executionMode")
     if mode is None:
-        records = state.get("repositories", {}).values()
-        if all(isinstance(record, dict) and record.get("worktree", {}).get("pluginOwned") is True for record in records):
-            mode = "worktree"
-        else:
-            mode = explicit or "worktree"
+        records_value = state.get("repositories")
+        if not isinstance(records_value, dict) or not records_value:
+            raise ValueError("ambiguous execution mode")
+        records = list(records_value.values())
+
+        def valid_workspace(record: object) -> bool:
+            if not isinstance(record, dict):
+                return False
+            workspace = record.get("workspace")
+            return (
+                isinstance(workspace, dict)
+                and isinstance(workspace.get("root"), str)
+                and bool(workspace["root"])
+            )
+
+        def valid_worktree(record: object) -> bool:
+            if not isinstance(record, dict) or not isinstance(record.get("worktree"), dict):
+                return False
+            worktree = record["worktree"]
+            workspace = record.get("workspace")
+            if not isinstance(workspace, dict):
+                return False
+            raw_path = worktree.get("path")
+            branch = worktree.get("branch")
+            base = workspace.get("baseCommit")
+            root = workspace.get("root")
+            if not all(isinstance(value, str) and value for value in (raw_path, branch, base, root)):
+                return False
+            path = Path(raw_path).resolve()
+            repository = Path(root).resolve()
+            expected_path = plugin_worktree_path(repository, branch.removeprefix("feature/"))
+            return (
+                raw_path == str(path)
+                and path == expected_path.resolve()
+                and (path / ".git").is_file()
+                and worktree.get("pluginOwned") is True
+                and path in registered_worktree_paths(repository)
+                and git(path, "rev-parse", "--show-toplevel").stdout.strip() == str(path)
+                and git(path, "rev-parse", "--git-common-dir").stdout.strip() == str(repository / ".git")
+                and git(path, "branch", "--show-current").stdout.strip() == branch
+                and git(path, "merge-base", "--is-ancestor", base, "HEAD", check=False).returncode == 0
+            )
+
+        if any(not valid_workspace(record) for record in records) or any(
+            isinstance(record, dict)
+            and record.get("worktree") is not None
+            and not valid_worktree(record)
+            for record in records
+        ):
+            raise ValueError("ambiguous execution mode")
+        mode = "worktree" if records and all(valid_worktree(record) for record in records) else explicit or "worktree"
         state["executionMode"] = mode
     if mode not in {"worktree", "branch"} or (explicit is not None and explicit != mode):
         raise ValueError("execution mode mismatch")
@@ -263,13 +309,21 @@ def create_or_reset_target(
     return "reset"
 
 
-def create_branch_target(repo: Path, target: str, *, base_commit: str | None = None) -> str:
+def create_branch_target(
+    repo: Path,
+    target: str,
+    *,
+    base_commit: str | None = None,
+    persisted_owner: bool = False,
+) -> str:
     """Execute branch-mode creation without worktree registration or reset."""
     if git(repo, "status", "--porcelain").stdout:
         return "blocked-dirty"
     base_commit = base_commit or git(repo, "rev-parse", "HEAD").stdout.strip()
     exists = git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{target}", check=False).returncode == 0
     if exists:
+        if not persisted_owner:
+            return "blocked-unowned"
         if branch_is_occupied(repo, target):
             return "blocked-occupied"
         if git(repo, "rev-parse", target).stdout.strip() != base_commit:
@@ -582,10 +636,51 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             select_repositories(workspace, discover_repositories(workspace), explicit=["api"])
 
     def test_legacy_worktree_state_migrates_and_persists_before_mode_validation(self):
-        state = {"repositories": {"api": {"worktree": {"pluginOwned": True}}}}
+        base = git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        status, metadata = worktree_for(self.repo, "demo")
+        self.assertEqual(status, "created")
+        state = {
+            "repositories": {
+                "api": {
+                    "workspace": {"root": str(self.repo.resolve()), "baseCommit": base},
+                    "worktree": metadata,
+                }
+            }
+        }
         migrated, mode = migrate_execution_mode(state, explicit="worktree")
         self.assertEqual(mode, "worktree")
         self.assertEqual(migrated["executionMode"], "worktree")
+
+        with self.assertRaisesRegex(ValueError, "mismatch"):
+            migrate_execution_mode(
+                {
+                    "repositories": {
+                        "api": {
+                            "workspace": {"root": str(self.repo.resolve()), "baseCommit": base},
+                            "worktree": metadata,
+                        }
+                    }
+                },
+                explicit="branch",
+            )
+
+        with self.assertRaisesRegex(ValueError, "ambiguous"):
+            migrate_execution_mode(
+                {"repositories": {"api": {"worktree": {"pluginOwned": True}}}},
+                explicit="branch",
+            )
+
+        with self.assertRaisesRegex(ValueError, "ambiguous"):
+            migrate_execution_mode(
+                {
+                    "repositories": {
+                        "api": {
+                            "workspace": {"root": str(self.repo.resolve()), "baseCommit": base},
+                            "worktree": {**metadata, "path": "../outside"},
+                        }
+                    }
+                }
+            )
 
     def test_legacy_primary_checkout_uses_explicit_choice_or_safe_default(self):
         legacy = {"repositories": {"api": {"workspace": {"root": "/tmp/api"}}}}
@@ -598,6 +693,12 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         self.assertEqual(defaulted["executionMode"], "worktree")
         with self.assertRaisesRegex(ValueError, "mismatch"):
             migrate_execution_mode(defaulted, explicit="branch")
+        with self.assertRaisesRegex(ValueError, "ambiguous"):
+            migrate_execution_mode({"repositories": {"api": {"workspace": []}}})
+        with self.assertRaisesRegex(ValueError, "ambiguous"):
+            migrate_execution_mode(
+                {"repositories": {"api": {"workspace": {"root": 7}, "worktree": None}}}
+            )
 
         workspace = Path(self.tempdir.name) / "workspace"
         workspace.mkdir()
@@ -809,12 +910,24 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         git(other, "init")
         self.assertFalse(validate_pre_edit_context(other, self.repo, "feature/demo", base))
 
+    def test_branch_mode_refuses_unowned_existing_branch(self):
+        base = git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        self.assertEqual(git(self.repo, "branch", "feature/demo", base).returncode, 0)
+        self.assertEqual(
+            create_branch_target(self.repo, "feature/demo", base_commit=base),
+            "blocked-unowned",
+        )
+        self.assertEqual(git(self.repo, "branch", "--show-current").stdout.strip(), "main")
+
     def test_branch_mode_refuses_dirty_or_diverged_existing_branch(self):
         (self.repo / "local-only.txt").write_text("local\n")
         self.assertEqual(create_branch_target(self.repo, "feature/demo"), "blocked-dirty")
         (self.repo / "local-only.txt").unlink()
         target_head = self.commit_target_change()
-        self.assertEqual(create_branch_target(self.repo, "feature/demo"), "blocked-base-mismatch")
+        self.assertEqual(
+            create_branch_target(self.repo, "feature/demo", persisted_owner=True),
+            "blocked-base-mismatch",
+        )
         self.assertEqual(git(self.repo, "branch", "--show-current").stdout.strip(), "main")
         self.assertEqual(git(self.repo, "rev-parse", "feature/demo").stdout.strip(), target_head)
 
@@ -1274,7 +1387,8 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             "separate optional branch-deletion confirmation",
         ):
             self.assertIn(phrase, WORKFLOW)
-        self.assertIn("State.md schema v4", README)
+        self.assertIn("as version 4", WORKFLOW)
+        self.assertIn("executionMode", README)
         self.assertIn("plugin-owned Git worktree", README)
         self.assertIn("same-repository", README)
 
