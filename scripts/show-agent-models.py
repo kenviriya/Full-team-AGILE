@@ -69,6 +69,54 @@ def artifact_root(value):
     return value
 
 
+DURABLE_ARTIFACTS = {
+    "Features": frozenset(
+        ("State.md", "01-prd.md", "02-ui-spec.md", "03-review-notes.md", "04-test-report.md")
+    ),
+    "Sprints": frozenset(
+        ("State.md", "01-sprint-plan.md", "02-integration-report.md", "03-sprint-recap.md")
+    ),
+    "Releases": frozenset(
+        ("State.md", "01-release-plan.md", "02-release-validation.md", "03-release-recap.md")
+    ),
+}
+
+
+def durable_artifact_path(path, cwd, artifact_value):
+    if not isinstance(path, str) or not path:
+        return False
+    base = Path(cwd if isinstance(cwd, str) else Path.cwd()).resolve()
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = base / candidate
+    try:
+        parts = list(Path(os.path.normpath(candidate)).relative_to(base).parts)
+    except ValueError:
+        return False
+    candidates = [parts]
+    root = artifact_root(artifact_value)
+    prefix = root.split("/") if root else []
+    if prefix and parts[:len(prefix)] == prefix:
+        candidates.insert(0, parts[len(prefix):])
+    for candidate in candidates:
+        if len(candidate) == 4 and candidate[0] in DURABLE_ARTIFACTS:
+            return candidate[3] in DURABLE_ARTIFACTS[candidate[0]]
+    return False
+
+
+def artifact_write_denial(path):
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": (
+                f"Durable artifact path {path!r} must be stored in the Obsidian MCP vault. "
+                "Use mcp__obsidian__write_note or mcp__obsidian__patch_note instead of Write/Edit."
+            ),
+        }
+    }
+
+
 def repository_root(cwd):
     try:
         result = subprocess.run(
@@ -183,9 +231,15 @@ def route(model):
     return "native" if model in NATIVE_MODELS else "gateway"
 
 
-def pre_tool_use(event, plugin_root, user_value):
+def pre_tool_use(event, plugin_root, user_value, artifact_value=""):
     tool_input = event.get("tool_input")
-    if event.get("tool_name") != "Agent" or not isinstance(tool_input, dict):
+    tool_name = event.get("tool_name")
+    if tool_name in {"Write", "Edit"} and isinstance(tool_input, dict):
+        path = tool_input.get("file_path")
+        if durable_artifact_path(path, event.get("cwd", Path.cwd()), artifact_value):
+            return artifact_write_denial(path)
+        return None
+    if tool_name != "Agent" or not isinstance(tool_input, dict):
         return None
     agent = agent_name(tool_input.get("subagent_type"))
     if not agent:
@@ -249,7 +303,7 @@ def main():
     event = json.load(sys.stdin)
     if sys.argv[1] != "pre-agent":
         raise SystemExit(f"unknown mode: {sys.argv[1]}")
-    output = pre_tool_use(event, plugin_root, user_value)
+    output = pre_tool_use(event, plugin_root, user_value, artifact_value)
     if output:
         print(json.dumps(output))
 

@@ -70,12 +70,19 @@ def block_dependents(items: dict[str, dict[str, object]], failed_item: str) -> s
     return blocked
 
 
+def repository_scope(item: dict[str, object]) -> set[str]:
+    scope = item.get("repositoryScope")
+    if scope is not None:
+        return set(scope)
+    return {item["repository"]}
+
+
 def conflicts(left: dict[str, object], right: dict[str, object]) -> bool:
     left_resources = left["resources"]
     right_resources = right["resources"]
     if left_resources is None or right_resources is None:
         return True
-    if left["repository"] == right["repository"] and not (
+    if repository_scope(left) & repository_scope(right) and not (
         left.get("isolatedWorktree") and right.get("isolatedWorktree")
     ):
         return True
@@ -142,6 +149,22 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertEqual(block_dependents(items, "api"), {"web", "e2e"})
         self.assertEqual(items["docs"]["status"], "planned")
 
+    def test_evidence_backed_scope_contract_requires_confirmation_for_ambiguity(self):
+        self.assertIn("scopeConfidence` (`unambiguous` or `needs-confirmation`)", WORKFLOW)
+        self.assertIn("scopeSource` (`inferred` or `user-confirmed`)", WORKFLOW)
+        self.assertIn("Ask before dispatch when evidence is absent, weak, conflicting, stale", WORKFLOW)
+        self.assertIn("never default to all children or the most likely repository", WORKFLOW)
+
+    def test_repository_sets_are_used_for_conflict_detection(self):
+        self.assertEqual(repository_scope({"repositoryScope": ["api", "web"]}), {"api", "web"})
+        self.assertEqual(repository_scope({"repository": "docs"}), {"docs"})
+        self.assertTrue(
+            conflicts(
+                {"repositoryScope": ["api", "web"], "resources": {("path", "a")}},
+                {"repositoryScope": ["web", "mobile"], "resources": {("path", "b")}},
+            )
+        )
+
     def test_different_repositories_with_disjoint_resources_can_run_in_parallel(self):
         api = {"repository": "api", "resources": {("contract", "saved-searches")}}
         docs = {"repository": "docs", "resources": {("path", "docs/searches.md")}}
@@ -157,12 +180,23 @@ class SprintWorkflowTests(unittest.TestCase):
             "resources": {("path", "api/other.md")},
             "isolatedWorktree": True,
         }
+        multi_repo = {
+            "repositoryScope": ["api", "web"],
+            "resources": {("path", "shared.md")},
+            "isolatedWorktree": True,
+        }
+        multi_repo_peer = {
+            "repositoryScope": ["web", "mobile"],
+            "resources": {("path", "other.md")},
+            "isolatedWorktree": True,
+        }
         unknown = {"repository": "docs", "resources": None}
 
         self.assertFalse(conflicts(api, docs))
         self.assertTrue(conflicts(api, web))
         self.assertTrue(conflicts(api, api_docs))
         self.assertFalse(conflicts(api_isolated, api_isolated_peer))
+        self.assertFalse(conflicts(multi_repo, multi_repo_peer))
         self.assertTrue(conflicts(api, unknown))
 
     def test_dispatch_batch_includes_only_ready_nonconflicting_items(self):
@@ -214,12 +248,20 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertIn("full-team-agile:feature", WORKFLOW)
         self.assertIn("non-Git invocation parent is a multi-repository workspace container", WORKFLOW)
         self.assertIn("preserve its exact root and basename", WORKFLOW)
-        self.assertIn("Sprint must not independently scan or infer child repositories", WORKFLOW)
+        self.assertIn("Sprint may perform only read-only discovery of eligible immediate-child repositories and evidence-based mapping", WORKFLOW)
+        self.assertIn("same canonical, non-symlink, real-`.git`, linked-worktree, `.claude/worktrees`, nested-repository, and path-boundary rules", WORKFLOW)
+        self.assertIn("scopeEvidence", WORKFLOW)
+        self.assertIn("scopeConfidence", WORKFLOW)
+        self.assertIn("scopeSource", WORKFLOW)
+        self.assertIn("auto-select only when concrete evidence converges", WORKFLOW)
+        self.assertIn("never default to all children or the most likely repository", WORKFLOW)
         self.assertIn("worktree safeguards", WORKFLOW)
         self.assertIn("distinct valid plugin-owned worktrees", WORKFLOW)
-        self.assertIn("Same-repository items", WORKFLOW)
+        self.assertIn("Any shared repository or unknown scope conflicts", WORKFLOW)
         self.assertIn("create a fallback checkout", WORKFLOW)
-        self.assertIn("Pass that preserved workspace context and each item's explicit workspace-relative repository scope", WORKFLOW)
+        self.assertIn("explicit workspace-relative `repositoryScope`", WORKFLOW)
+        self.assertIn("untrusted selection request", WORKFLOW)
+        self.assertIn("freshly rediscover and validate every path", WORKFLOW)
         self.assertIn("sprint must not imply all child repositories", WORKFLOW)
         self.assertIn("single parallel dispatch", WORKFLOW)
         self.assertIn("one separate feature delegate per selected ready item", WORKFLOW)
@@ -266,7 +308,8 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertIn("Sprints/<workspace-name>/<sprint-id>/", README)
         self.assertIn("non-Git parent folder", README)
         self.assertIn("multi-repository workspace container", README)
-        self.assertIn("explicit workspace-relative repository scope", README)
+        self.assertIn("unambiguous single- or multi-repository scope", README)
+        self.assertIn("freshly validates every supplied path", README)
         self.assertIn("parallel `feature` workflows", README)
         self.assertIn("03-sprint-recap.md", README)
         self.assertIn("integration gate", README)

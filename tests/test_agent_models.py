@@ -65,6 +65,52 @@ with tempfile.TemporaryDirectory() as directory:
     assert denied["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert "gateway" in denied["hookSpecificOutput"]["permissionDecisionReason"]
 
+    for tool_name, path in (
+        ("Write", "Features/workspace/feature-x/State.md"),
+        ("Edit", "MVPVaults/Sprints/workspace/sprint-x/01-sprint-plan.md"),
+        ("Write", "Releases/workspace/release-x/02-release-validation.md"),
+    ):
+        artifact = MODELS.pre_tool_use(
+            {
+                "cwd": str(root),
+                "tool_name": tool_name,
+                "tool_input": {"file_path": path},
+            },
+            ROOT,
+            "{}",
+            "MVPVaults",
+        )
+        artifact_output = artifact["hookSpecificOutput"]
+        assert artifact_output["permissionDecision"] == "deny"
+        assert "Obsidian MCP" in artifact_output["permissionDecisionReason"]
+
+    absolute = MODELS.pre_tool_use(
+        {
+            "cwd": str(root),
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(root / "Features/workspace/feature-x/01-prd.md")},
+        },
+        ROOT,
+        "{}",
+    )
+    assert absolute["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    for path in (
+        "src/feature.py",
+        "Features/workspace/feature-x/notes.md",
+        "Features/workspace/State.md",
+        "Features/workspace/feature-x/nested/State.md",
+        "README.md",
+    ):
+        assert MODELS.pre_tool_use(
+            {"cwd": str(root), "tool_name": "Write", "tool_input": {"file_path": path}},
+            ROOT,
+            "{}",
+        ) is None
+    assert MODELS.pre_tool_use(
+        {"cwd": str(root), "tool_name": "Write", "tool_input": {}}, ROOT, "{}"
+    ) is None
+
     native = MODELS.pre_tool_use(
         {**event, "tool_input": {**event["tool_input"], "prompt": "Implement the feature."}},
         ROOT,
@@ -154,7 +200,7 @@ assert "product-manager -> repo/model (repository, gateway)" in lines[1]
 assert "ux-designer -> haiku (user/global, native)" in lines[2]
 
 hooks = json.loads((ROOT / "hooks/hooks.json").read_text())["hooks"]
-assert hooks["PreToolUse"][0]["matcher"] == "Agent"
+assert hooks["PreToolUse"][0]["matcher"] == "Agent|Write|Edit"
 assert len(hooks["SessionStart"]) == 1
 for event in ("SessionStart", "PreToolUse"):
     command = hooks[event][0]["hooks"][0]["command"]

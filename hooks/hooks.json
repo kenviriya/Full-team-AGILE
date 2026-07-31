@@ -12,7 +12,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Agent",
+        "matcher": "Agent|Write|Edit",
         "hooks": [
           {
             "type": "command",
