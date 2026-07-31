@@ -242,7 +242,20 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertEqual(items["docs"]["featureId"], "docs--20260727t000000z--d4c3b2a1")
         self.assertEqual(items["docs"]["launchFailure"], "delegate did not start")
 
-    def test_workflow_delegates_parallel_feature_batches_without_reimplementing_feature_lifecycle(self):
+    def test_execution_mode_is_recorded_and_branch_mode_serializes_overlap(self):
+        self.assertIn("executionMode=worktree|branch", WORKFLOW)
+        self.assertIn("executionMode", WORKFLOW)
+        self.assertIn("executionMode=<sprint-execution-mode>", WORKFLOW)
+        self.assertIn("serialize any selected items whose repository scopes overlap", WORKFLOW)
+        self.assertIn("legacy record missing `executionMode`", WORKFLOW)
+        self.assertIn("persist `worktree` for legacy sprint state", WORKFLOW)
+        self.assertIn("inspect every referenced nonterminal Feature State.md read-only", WORKFLOW)
+        self.assertIn("preserve and persist `worktree` and reject an explicit `branch` request", WORKFLOW)
+        self.assertIn("feature modes conflict or any is ambiguous", WORKFLOW)
+        self.assertIn("do not dispatch or persist a different mode", WORKFLOW)
+        self.assertIn("every existing nonterminal feature explicitly records `branch`", WORKFLOW)
+        self.assertIn("never infer branch mode from absent fields", WORKFLOW)
+
         self.assertTrue((ROOT / "skills/sprint/SKILL.md").is_file())
         self.assertIn("name: sprint", WORKFLOW)
         self.assertIn("full-team-agile:feature", WORKFLOW)

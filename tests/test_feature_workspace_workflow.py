@@ -123,6 +123,21 @@ def select_repositories(
     return detected if len(detected) == 1 else []
 
 
+def migrate_execution_mode(state: dict[str, object], explicit: str | None = None) -> tuple[dict[str, object], str]:
+    """Persist a safe legacy mode before validating the invocation mode."""
+    mode = state.get("executionMode")
+    if mode is None:
+        records = state.get("repositories", {}).values()
+        if all(isinstance(record, dict) and record.get("worktree", {}).get("pluginOwned") is True for record in records):
+            mode = "worktree"
+        else:
+            mode = explicit or "worktree"
+        state["executionMode"] = mode
+    if mode not in {"worktree", "branch"} or (explicit is not None and explicit != mode):
+        raise ValueError("execution mode mismatch")
+    return state, mode
+
+
 def migrate_v2_state(state: dict[str, object], workspace: Path, root_confirmed: bool) -> dict[str, object]:
     repository = state.get("repository")
     if not isinstance(repository, dict) or Path(str(repository.get("root", ""))).resolve() != workspace.resolve():
@@ -246,6 +261,23 @@ def create_or_reset_target(
     git(repo, "checkout", target)
     git(repo, "reset", "--hard", remote_main)
     return "reset"
+
+
+def create_branch_target(repo: Path, target: str, *, base_commit: str | None = None) -> str:
+    """Execute branch-mode creation without worktree registration or reset."""
+    if git(repo, "status", "--porcelain").stdout:
+        return "blocked-dirty"
+    base_commit = base_commit or git(repo, "rev-parse", "HEAD").stdout.strip()
+    exists = git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{target}", check=False).returncode == 0
+    if exists:
+        if branch_is_occupied(repo, target):
+            return "blocked-occupied"
+        if git(repo, "rev-parse", target).stdout.strip() != base_commit:
+            return "blocked-base-mismatch"
+        git(repo, "switch", target)
+        return "checked-out"
+    result = git(repo, "switch", "-c", target, base_commit, check=False)
+    return "created" if result.returncode == 0 else "blocked-create"
 
 
 def artifact(path: str, kind: str = "test") -> dict[str, str]:
@@ -549,7 +581,24 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid or unconfirmed"):
             select_repositories(workspace, discover_repositories(workspace), explicit=["api"])
 
-    def test_version_two_migration_requires_matching_confirmed_root(self):
+    def test_legacy_worktree_state_migrates_and_persists_before_mode_validation(self):
+        state = {"repositories": {"api": {"worktree": {"pluginOwned": True}}}}
+        migrated, mode = migrate_execution_mode(state, explicit="worktree")
+        self.assertEqual(mode, "worktree")
+        self.assertEqual(migrated["executionMode"], "worktree")
+
+    def test_legacy_primary_checkout_uses_explicit_choice_or_safe_default(self):
+        legacy = {"repositories": {"api": {"workspace": {"root": "/tmp/api"}}}}
+        migrated, mode = migrate_execution_mode(legacy.copy(), explicit="branch")
+        self.assertEqual(mode, "branch")
+        self.assertEqual(migrated["executionMode"], "branch")
+
+        defaulted, mode = migrate_execution_mode(legacy.copy())
+        self.assertEqual(mode, "worktree")
+        self.assertEqual(defaulted["executionMode"], "worktree")
+        with self.assertRaisesRegex(ValueError, "mismatch"):
+            migrate_execution_mode(defaulted, explicit="branch")
+
         workspace = Path(self.tempdir.name) / "workspace"
         workspace.mkdir()
         git(workspace, "init")
@@ -621,7 +670,17 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
 
     def test_documentation_defines_workspace_scoped_contract(self):
         for phrase in (
-            "non-Git invocation parent is a multi-repository workspace container",
+            "executionMode=worktree|branch",
+            "legacy record missing `executionMode`",
+            "valid exact plugin-owned worktree metadata",
+            "legacy primary-checkout record without a worktree",
+            "safe default only when no explicit choice is provided",
+            "persist an explicit choice before Git mutation",
+            "clean before branch creation or checkout",
+            "immediately before each source-editing delegation",
+            "must allow expected uncommitted feature changes",
+            "without requiring a clean tree",
+            "branch deletion retains its separate clean-checkout requirement",
             "preserve its exact path and basename",
             "immediate child directories",
             "explicit repository path or name",
@@ -729,6 +788,35 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         (path / "local.txt").write_text("dirty\n")
         self.assertEqual(remove_plugin_worktree(self.repo, "demo", metadata, phase="cleanup", reviews_complete=True, status="done"), "skipped-dirty")
         self.assertIn(path, registered_worktree_paths(self.repo))
+
+    def test_branch_mode_creates_primary_checkout_branch_without_worktree(self):
+        before = registered_worktree_paths(self.repo)
+        self.assertEqual(create_branch_target(self.repo, "feature/demo"), "created")
+        self.assertEqual(git(self.repo, "branch", "--show-current").stdout.strip(), "feature/demo")
+        self.assertEqual(registered_worktree_paths(self.repo), before)
+
+    def test_branch_mode_allows_feature_changes_for_qa_review_but_rejects_wrong_context(self):
+        base = git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        self.assertEqual(create_branch_target(self.repo, "feature/demo", base_commit=base), "created")
+        (self.repo / "tracked.txt").write_text("feature change\n")
+
+        # QA/review validate identity and ancestry, not cleanliness: feature changes are expected here.
+        self.assertTrue(validate_pre_edit_context(self.repo, self.repo, "feature/demo", base))
+        self.assertFalse(validate_pre_edit_context(self.repo, self.repo, "main", base))
+
+        other = Path(self.tempdir.name) / "other"
+        other.mkdir()
+        git(other, "init")
+        self.assertFalse(validate_pre_edit_context(other, self.repo, "feature/demo", base))
+
+    def test_branch_mode_refuses_dirty_or_diverged_existing_branch(self):
+        (self.repo / "local-only.txt").write_text("local\n")
+        self.assertEqual(create_branch_target(self.repo, "feature/demo"), "blocked-dirty")
+        (self.repo / "local-only.txt").unlink()
+        target_head = self.commit_target_change()
+        self.assertEqual(create_branch_target(self.repo, "feature/demo"), "blocked-base-mismatch")
+        self.assertEqual(git(self.repo, "branch", "--show-current").stdout.strip(), "main")
+        self.assertEqual(git(self.repo, "rev-parse", "feature/demo").stdout.strip(), target_head)
 
     def test_clean_creation_uses_current_checkout_without_worktree_registration(self):
         before = registered_worktree_paths(self.repo)
@@ -1169,7 +1257,11 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
 
     def test_documentation_defines_worktree_creation_and_safe_cleanup(self):
         for phrase in (
-            "version 4",
+            "executionMode=worktree|branch",
+            "branch mode",
+            "primary checkout",
+            "without creating worktrees",
+            "feature owns all Git mutation",
             "plugin-owned worktree",
             ".full-team-agile/worktrees/<repository-name>/<feature-id>",
             "git -C <primary-checkout> worktree add -b <feature-branch>",

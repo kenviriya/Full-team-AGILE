@@ -67,13 +67,14 @@ Invoke the installed skill directly:
 /full-team-agile:feature Add saved searches to the dashboard.
 ```
 
+`feature` and `sprint` accept `executionMode=worktree|branch` on new and continue invocations. `worktree` is the default and preserves isolated plugin-owned worktrees. `branch` makes the feature workflow own safe branch creation and checkout in the clean primary checkout without creating worktrees; sprint passes the mode through and serializes overlapping repository scopes in that mode.
+
 Coordinate a sprint backlog with dependency-safe feature runs:
 
 ```text
 /full-team-agile:sprint Deliver saved searches, including API, dashboard UI, and documentation.
+/full-team-agile:sprint executionMode=branch Deliver saved searches, including API, dashboard UI, and documentation.
 ```
-
-## How it works
 
 The plugin is a resumable AI delivery workflow: specialized agents define, design, implement, test, and independently review work; durable Obsidian-vault artifacts preserve progress across sessions. Feature delivery owns repository and branch safety, sprint coordinates dependencies and integration, and release performs confirmed release mutations only.
 
