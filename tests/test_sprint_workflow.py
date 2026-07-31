@@ -101,11 +101,17 @@ def conflicts(left: dict[str, object], right: dict[str, object], execution_mode:
     )
 
 
-def select_dispatch_batch(items: dict[str, dict[str, object]], execution_mode: str = "worktree") -> set[str]:
+def select_dispatch_batch(
+    items: dict[str, dict[str, object]],
+    execution_mode: str = "worktree",
+    dispatch_mode: str = "parallel",
+) -> set[str]:
     batch = set()
     for item_id in sorted(ready_items(items)):
         if not any(conflicts(items[item_id], items[selected], execution_mode) for selected in batch):
             batch.add(item_id)
+            if dispatch_mode == "serial":
+                break
     return batch
 
 
@@ -230,6 +236,7 @@ class SprintWorkflowTests(unittest.TestCase):
         }
 
         self.assertEqual(select_dispatch_batch(items), {"api", "docs"})
+        self.assertEqual(select_dispatch_batch(items, dispatch_mode="serial"), {"api"})
 
     def test_branch_mode_dispatch_serializes_overlapping_repository_scopes(self):
         items = {
@@ -251,6 +258,7 @@ class SprintWorkflowTests(unittest.TestCase):
 
         self.assertEqual(select_dispatch_batch(items, "worktree"), {"api-a", "api-b"})
         self.assertEqual(select_dispatch_batch(items, "branch"), {"api-a"})
+        self.assertEqual(select_dispatch_batch(items, "worktree", "serial"), {"api-a"})
 
     def test_failed_batch_launch_preserves_feature_id_and_returns_item_to_ready(self):
         items = {
@@ -267,6 +275,15 @@ class SprintWorkflowTests(unittest.TestCase):
 
     def test_execution_mode_is_recorded_and_branch_mode_serializes_overlap(self):
         self.assertIn("executionMode=worktree|branch", WORKFLOW)
+        self.assertIn("CLAUDE_PLUGIN_OPTION_DEFAULT_EXECUTION_MODE", WORKFLOW)
+        self.assertIn("absent, empty, or invalid plugin configuration warns and falls back to `worktree`", WORKFLOW)
+        self.assertIn("The plugin default never changes an existing sprint", WORKFLOW)
+        self.assertIn("dispatchMode=serial|parallel", WORKFLOW)
+        self.assertIn("always ask the user to choose `dispatchMode=serial|parallel`", WORKFLOW)
+        self.assertIn("`dispatchMode`", WORKFLOW)
+        self.assertIn("dispatchMode=<sprint-dispatch-mode>", WORKFLOW)
+        self.assertIn("In `dispatchMode=serial`, that batch contains exactly one item", WORKFLOW)
+        self.assertIn("in `dispatchMode=parallel`, it may contain multiple pairwise-safe items", WORKFLOW)
         self.assertIn("executionMode", WORKFLOW)
         self.assertIn("executionMode=<sprint-execution-mode>", WORKFLOW)
         self.assertIn("serialize any selected items whose repository scopes overlap", WORKFLOW)
@@ -299,7 +316,7 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertIn("untrusted selection request", WORKFLOW)
         self.assertIn("freshly rediscover and validate every path", WORKFLOW)
         self.assertIn("sprint must not imply all child repositories", WORKFLOW)
-        self.assertIn("single parallel dispatch", WORKFLOW)
+        self.assertIn("one dispatch batch", WORKFLOW)
         self.assertIn("one separate feature delegate per selected ready item", WORKFLOW)
         self.assertIn("assign and persist each selected item's feature ID and record its launch as pending", WORKFLOW)
         self.assertIn("Mark an item `running` only after its delegate starts", WORKFLOW)
@@ -346,7 +363,8 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertIn("multi-repository workspace container", README)
         self.assertIn("unambiguous single- or multi-repository scope", README)
         self.assertIn("freshly validates every supplied path", README)
-        self.assertIn("parallel `feature` workflows", README)
+        self.assertIn("dispatching one eligible item at a time in serial mode", README)
+        self.assertIn("in parallel mode", README)
         self.assertIn("03-sprint-recap.md", README)
         self.assertIn("integration gate", README)
 

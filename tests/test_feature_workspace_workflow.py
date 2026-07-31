@@ -123,6 +123,12 @@ def select_repositories(
     return detected if len(detected) == 1 else []
 
 
+def resolve_new_execution_mode(explicit: str | None = None, configured: str | None = None) -> str:
+    if explicit in {"worktree", "branch"}:
+        return explicit
+    return configured if configured in {"worktree", "branch"} else "worktree"
+
+
 def migrate_execution_mode(state: dict[str, object], explicit: str | None = None) -> tuple[dict[str, object], str]:
     """Persist a safe legacy mode before validating the invocation mode."""
     mode = state.get("executionMode")
@@ -688,6 +694,10 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         self.assertEqual(mode, "branch")
         self.assertEqual(migrated["executionMode"], "branch")
 
+        self.assertEqual(resolve_new_execution_mode(configured="branch"), "branch")
+        self.assertEqual(resolve_new_execution_mode(explicit="worktree", configured="branch"), "worktree")
+        self.assertEqual(resolve_new_execution_mode(configured="invalid"), "worktree")
+
         defaulted, mode = migrate_execution_mode(legacy.copy())
         self.assertEqual(mode, "worktree")
         self.assertEqual(defaulted["executionMode"], "worktree")
@@ -772,6 +782,9 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
     def test_documentation_defines_workspace_scoped_contract(self):
         for phrase in (
             "executionMode=worktree|branch",
+            "CLAUDE_PLUGIN_OPTION_DEFAULT_EXECUTION_MODE",
+            "absent, empty, or invalid plugin configuration warns and falls back to `worktree`",
+            "The plugin default never changes an existing feature",
             "legacy record missing `executionMode`",
             "valid exact plugin-owned worktree metadata",
             "legacy primary-checkout record without a worktree",
@@ -1387,7 +1400,11 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             "separate optional branch-deletion confirmation",
         ):
             self.assertIn(phrase, WORKFLOW)
-        self.assertIn("as version 4", WORKFLOW)
+        self.assertIn("as version 5", WORKFLOW)
+        self.assertIn("dispatchMode=serial|parallel", WORKFLOW)
+        self.assertIn("always ask the user to choose `dispatchMode=serial|parallel`", WORKFLOW)
+        self.assertIn("In `dispatchMode=serial`", WORKFLOW)
+        self.assertIn("In `dispatchMode=parallel`", WORKFLOW)
         self.assertIn("executionMode", README)
         self.assertIn("plugin-owned Git worktree", README)
         self.assertIn("same-repository", README)
