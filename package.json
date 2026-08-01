@@ -1,0 +1,28 @@
+{
+  "name": "opencode-full-team-agile",
+  "version": "0.6.0",
+  "description": "Native OpenCode npm plugin package for Full-team-AGILE.",
+  "type": "module",
+  "main": "./opencode/index.js",
+  "exports": {
+    ".": "./opencode/index.js"
+  },
+  "license": "MIT",
+  "author": "Ken Viriya",
+  "homepage": "https://github.com/kenviriya/Full-team-AGILE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kenviriya/Full-team-AGILE.git"
+  },
+  "keywords": ["opencode", "opencode-plugin", "agile", "feature-delivery"],
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.18.10"
+  },
+  "files": [
+    "opencode/index.js",
+    "skills",
+    "agents",
+    "README.md",
+    "LICENSE"
+  ]
+}

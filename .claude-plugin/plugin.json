@@ -1,6 +1,6 @@
 {
   "name": "full-team-agile",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Stateful feature and sprint delivery with product, UX, implementation, QA, review, and integration.",
   "author": {
     "name": "Ken Viriya",
@@ -23,12 +23,6 @@
       "title": "Artifact root",
       "description": "Optional Obsidian vault-relative parent directory for Features, Sprints, and Releases. Empty stores them at the selected vault root.",
       "default": ""
-    },
-    "default_execution_mode": {
-      "type": "string",
-      "title": "Default execution mode",
-      "description": "Default Git isolation mode for new features and sprints when executionMode is omitted. Must be worktree or branch.",
-      "default": "worktree"
     }
   }
 }

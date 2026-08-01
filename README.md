@@ -45,19 +45,23 @@ npx skills add kenviriya/Full-team-AGILE
 
 ### OpenCode
 
-Install the Agent Skills-compatible skill with the `skills` CLI:
+Install the portable Agent Skills distribution with the `skills` CLI:
 
 ```bash
 npx skills add kenviriya/Full-team-AGILE
 ```
 
-Or add the repository directly to `opencode.json`:
+The native OpenCode npm package is publish-ready but is not published by this repository's development workflow. After publishing `opencode-full-team-agile`, add it to `opencode.json`:
 
 ```json
 {
-  "plugin": ["github:kenviriya/Full-team-AGILE"]
+  "plugin": ["opencode-full-team-agile"]
 }
 ```
+
+For local development before publication, copy `opencode/index.js` into `.opencode/plugins/full-team-agile.js` and add `@opencode-ai/plugin` to `.opencode/package.json`; OpenCode loads local plugin files directly and installs their declared dependencies.
+
+The npm/local plugin exposes `full_team_agile_status`, which reports the integration boundary. It includes the same `feature`, `sprint`, and `release` skills for portable reuse; OpenCode’s stable V1 plugin API does not register or transform them. It does not claim Claude-only Obsidian artifact storage, hooks, private agent-model routing, or release lifecycle execution. Use those skills only when the OpenCode setup provides compatible delegation, durable artifact storage, and Git lifecycle support.
 
 ## Use
 
