@@ -782,8 +782,6 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
     def test_documentation_defines_workspace_scoped_contract(self):
         for phrase in (
             "executionMode=worktree|branch",
-            "CLAUDE_PLUGIN_OPTION_DEFAULT_EXECUTION_MODE",
-            "absent, empty, or invalid plugin configuration warns and falls back to `worktree`",
             "The plugin default never changes an existing feature",
             "legacy record missing `executionMode`",
             "valid exact plugin-owned worktree metadata",
@@ -1402,9 +1400,13 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             self.assertIn(phrase, WORKFLOW)
         self.assertIn("as version 5", WORKFLOW)
         self.assertIn("dispatchMode=serial|parallel", WORKFLOW)
-        self.assertIn("always ask the user to choose `dispatchMode=serial|parallel`", WORKFLOW)
-        self.assertIn("In `dispatchMode=serial`", WORKFLOW)
-        self.assertIn("In `dispatchMode=parallel`", WORKFLOW)
+        self.assertIn("For every new feature, first ask the user to choose `dispatchMode=serial|parallel`, then ask the user to choose `executionMode=worktree|branch`", WORKFLOW)
+        self.assertLess(
+            WORKFLOW.index("first ask the user to choose `dispatchMode=serial|parallel`"),
+            WORKFLOW.index("then ask the user to choose `executionMode=worktree|branch`"),
+        )
+        self.assertIn("Persist the dispatch choice, then the execution choice", WORKFLOW)
+        self.assertIn("On continuation, reread State.md: retain its valid persisted `executionMode` and `dispatchMode`", WORKFLOW)
         self.assertIn("executionMode", README)
         self.assertIn("plugin-owned Git worktree", README)
         self.assertIn("same-repository", README)

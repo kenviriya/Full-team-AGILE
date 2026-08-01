@@ -275,11 +275,15 @@ class SprintWorkflowTests(unittest.TestCase):
 
     def test_execution_mode_is_recorded_and_branch_mode_serializes_overlap(self):
         self.assertIn("executionMode=worktree|branch", WORKFLOW)
-        self.assertIn("CLAUDE_PLUGIN_OPTION_DEFAULT_EXECUTION_MODE", WORKFLOW)
-        self.assertIn("absent, empty, or invalid plugin configuration warns and falls back to `worktree`", WORKFLOW)
         self.assertIn("The plugin default never changes an existing sprint", WORKFLOW)
         self.assertIn("dispatchMode=serial|parallel", WORKFLOW)
-        self.assertIn("always ask the user to choose `dispatchMode=serial|parallel`", WORKFLOW)
+        self.assertIn("For every new sprint, first ask the user to choose `dispatchMode=serial|parallel`, then ask the user to choose `executionMode=worktree|branch`", WORKFLOW)
+        self.assertLess(
+            WORKFLOW.index("first ask the user to choose `dispatchMode=serial|parallel`"),
+            WORKFLOW.index("then ask the user to choose `executionMode=worktree|branch`"),
+        )
+        self.assertIn("Persist the dispatch choice, then the execution choice", WORKFLOW)
+        self.assertIn("On continuation, reread State.md: retain a valid persisted `dispatchMode`", WORKFLOW)
         self.assertIn("`dispatchMode`", WORKFLOW)
         self.assertIn("dispatchMode=<sprint-dispatch-mode>", WORKFLOW)
         self.assertIn("In `dispatchMode=serial`, that batch contains exactly one item", WORKFLOW)
@@ -363,6 +367,7 @@ class SprintWorkflowTests(unittest.TestCase):
         self.assertIn("multi-repository workspace container", README)
         self.assertIn("unambiguous single- or multi-repository scope", README)
         self.assertIn("freshly validates every supplied path", README)
+        self.assertIn("first asks whether to use `serial` or `parallel`, then asks whether to use `worktree` or `branch`", README)
         self.assertIn("dispatching one eligible item at a time in serial mode", README)
         self.assertIn("in parallel mode", README)
         self.assertIn("03-sprint-recap.md", README)

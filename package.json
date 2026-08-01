@@ -1,6 +1,6 @@
 {
   "name": "opencode-full-team-agile",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Native OpenCode npm plugin package for Full-team-AGILE.",
   "type": "module",
   "main": "./opencode/index.js",

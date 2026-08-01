@@ -14,7 +14,7 @@ PACKAGE = json.loads((ROOT / "package.json").read_text())
 class OpenCodeNpmPluginTests(unittest.TestCase):
     def test_package_metadata_and_entrypoint_are_native_opencode_compatible(self):
         self.assertEqual(PACKAGE["name"], "opencode-full-team-agile")
-        self.assertEqual(PACKAGE["version"], "0.6.0")
+        self.assertEqual(PACKAGE["version"], "0.6.1")
         self.assertEqual(PACKAGE["main"], "./opencode/index.js")
         self.assertEqual(PACKAGE["exports"], {".": "./opencode/index.js"})
         self.assertIn("@opencode-ai/plugin", PACKAGE["dependencies"])
