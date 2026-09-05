@@ -12,6 +12,11 @@ WORKFLOW = (ROOT / "skills/feature/SKILL.md").read_text()
 README = (ROOT / "README.md").read_text()
 
 
+def assert_contract_order(test: unittest.TestCase, *phrases: str) -> None:
+    positions = [WORKFLOW.index(phrase) for phrase in phrases]
+    test.assertEqual(positions, sorted(positions))
+
+
 def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args], cwd=repo, text=True, capture_output=True, check=check
@@ -782,45 +787,27 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
     def test_documentation_defines_workspace_scoped_contract(self):
         for phrase in (
             "executionMode=worktree|branch",
-            "The plugin default never changes an existing feature",
-            "legacy record missing `executionMode`",
-            "valid exact plugin-owned worktree metadata",
-            "legacy primary-checkout record without a worktree",
-            "safe default only when no explicit choice is provided",
-            "persist an explicit choice before Git mutation",
-            "clean before branch creation or checkout",
-            "immediately before each source-editing delegation",
-            "must allow expected uncommitted feature changes",
-            "without requiring a clean tree",
-            "branch deletion retains its separate clean-checkout requirement",
-            "preserve its exact path and basename",
-            "immediate child directories",
-            "explicit repository path or name",
+            "On continuation, reread State.md and reject conflicting supplied modes",
+            "canonical, non-symlinked immediate-child primary Git checkouts",
+            "freshly validated coordinator scope",
+            "explicit path/name",
             "current directory",
             "active file",
             "sole eligible child",
-            "coordinator-supplied repository scope validated by fresh discovery",
-            "untrusted selection request",
-            "reject the whole supplied scope without fallback",
-            "session-scoped confirmation",
-            "workspace-relative",
-            "separate delegation",
-            "validated recorded runtime",
-            "plugin-owned worktree",
+            "Reject the whole invalid scope without sibling fallback",
+            "workspace-relative path",
+            "plugin-owned runtime",
             "git -C <primary-checkout> worktree add",
-            "inherited Agent cwd",
+            "Native Agent cwd is untrusted",
             "git -C <recorded-runtime>",
-            "success`, `failed`, `skipped`, `rejected`, or `unavailable",
         ):
             self.assertIn(phrase, WORKFLOW)
         for phrase in (
             "Obsidian MCP vault tools only",
-            "never project-relative filesystem operations",
             "<artifact-root>/Features/<workspace-name>/<feature-id>/",
             "artifactRoot",
-            "configured path",
-            "stop as ambiguous",
-            "Never move or relocate durable artifacts",
+            "vault-relative, never an OS path",
+            "mark stale or moved records unavailable rather than remapping them",
             "<feature-directory>",
         ):
             self.assertIn(phrase, WORKFLOW)
@@ -1382,34 +1369,92 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
     def test_documentation_defines_worktree_creation_and_safe_cleanup(self):
         for phrase in (
             "executionMode=worktree|branch",
-            "branch mode",
-            "primary checkout",
-            "without creating worktrees",
-            "feature owns all Git mutation",
-            "plugin-owned worktree",
-            ".full-team-agile/worktrees/<repository-name>/<feature-id>",
-            "git -C <primary-checkout> worktree add -b <feature-branch>",
-            "Version-3 primary-checkout workspaces remain valid",
-            "recorded runtime path",
-            "Distinct feature IDs may make concurrent source edits",
-            "git -C <primary-root> worktree remove <worktree-path>",
-            "git -C <primary-root> worktree prune",
-            "This never deletes the feature branch",
-            "separate optional branch-deletion confirmation",
+            "clean selected primary checkout",
+            "serialize all same-repository ticket work",
+            "plugin-owned runtime outside the primary checkout",
+            ".full-team-agile/worktrees/<repository-name>/<feature-id>/<ticket-id>",
+            "git -C <primary-checkout> worktree add -b feature/<ticket-id>-<slug>",
+            "recorded ticket runtime",
+            "Branch mode always serializes same-repository tickets",
+            "git worktree remove",
+            "git worktree prune",
+            "Always retain ticket branches unless a separate repository-qualified deletion flow",
         ):
             self.assertIn(phrase, WORKFLOW)
-        self.assertIn("as version 5", WORKFLOW)
+        self.assertIn("version 5, not version 6", WORKFLOW)
         self.assertIn("dispatchMode=serial|parallel", WORKFLOW)
-        self.assertIn("For every new feature, first ask the user to choose `dispatchMode=serial|parallel`, then ask the user to choose `executionMode=worktree|branch`", WORKFLOW)
+        self.assertIn("For every new feature, ask for dispatch mode and then execution mode", WORKFLOW)
         self.assertLess(
-            WORKFLOW.index("first ask the user to choose `dispatchMode=serial|parallel`"),
-            WORKFLOW.index("then ask the user to choose `executionMode=worktree|branch`"),
+            WORKFLOW.index("ask for dispatch mode"),
+            WORKFLOW.index("and then execution mode"),
         )
-        self.assertIn("Persist the dispatch choice, then the execution choice", WORKFLOW)
-        self.assertIn("On continuation, reread State.md: retain its valid persisted `executionMode` and `dispatchMode`", WORKFLOW)
+        self.assertIn("persist both before lifecycle Git mutation or delegation", WORKFLOW)
+        self.assertIn("On continuation, reread State.md and reject conflicting supplied modes", WORKFLOW)
         self.assertIn("executionMode", README)
-        self.assertIn("plugin-owned Git worktree", README)
+        self.assertIn("plugin-owned", README)
         self.assertIn("same-repository", README)
+
+    def test_documentation_defines_version_six_ticket_lifecycle_and_approval_gate(self):
+        self.assertIn("State.md as **version 6**", WORKFLOW)
+        self.assertIn("`prdApproval` records at least `status: pending|approved`", WORKFLOW)
+        self.assertIn("Affirmative approval records that revision", WORKFLOW)
+        self.assertIn("Perform no UX, ticket, Git, or builder action here", WORKFLOW)
+        assert_contract_order(
+            self,
+            "- **questions:**",
+            "- **prd:**",
+            "- **prd-approval:**",
+            "- **ux-check:**",
+            "- **ux:**",
+            "- **tickets:**",
+            "- **implementation:**",
+            "- **testing:**",
+            "- **review:**",
+            "- **cleanup:**",
+            "- **ready-for-integration:**",
+        )
+        self.assertIn("Existing **version-5** features continue", WORKFLOW)
+        self.assertIn("Do not fabricate approval or tickets and do not migrate them to version 6", WORKFLOW)
+
+    def test_documentation_defines_repository_and_ticket_identity(self):
+        for phrase in (
+            "`pas-services` becomes `PAS-SERVICES`",
+            "_ticket-sequences/<repository-key>.md",
+            "revalidate the exact previously read counter immediately before persistence",
+            "Fail closed on a concurrent change",
+            "id: PAS-SERVICES-001",
+            "artifact: tickets/PAS-SERVICES-001-user-auth.md",
+            "branch: feature/PAS-SERVICES-001-user-auth",
+            "One ticket owns one short-lived branch",
+            "Before creating a ticket runtime",
+        ):
+            self.assertIn(phrase, WORKFLOW)
+
+    def test_documentation_defines_ticket_bases_dependencies_and_dispatch(self):
+        for phrase in (
+            "branches from the repository's recorded feature base commit",
+            "branches from the exact recorded committed tip of its prerequisite ticket branch",
+            "permit at most three tickets (`A → B → C`)",
+            "Depends on <prerequisite ticket/PR>; do not merge until it is merged",
+            "the workflow never creates or inspects a PR",
+            "A ticket is dispatchable only when its dependencies are complete",
+            "`parallel` may run dependency-ready tickets only",
+            "Branch mode always serializes same-repository tickets",
+        ):
+            self.assertIn(phrase, WORKFLOW)
+
+    def test_documentation_defines_ticket_handoffs_and_rollups(self):
+        for phrase in (
+            "Every builder, QA, and review delegation receives exactly one ticket",
+            "Builders implement only their assigned ticket",
+            "QA independently validates one implemented ticket branch/runtime at a time",
+            "ticket-keyed evidence rolled up to PRD criteria in `04-test-report.md`",
+            "Review independently examines one QA-passing ticket branch/runtime at a time",
+            "ticket-keyed findings and PRD traceability in `03-review-notes.md`",
+            "enter only after every ticket independently passes QA, review, and required cleanup",
+            "Do not call the feature integrated or done",
+        ):
+            self.assertIn(phrase, WORKFLOW)
 
 
 
