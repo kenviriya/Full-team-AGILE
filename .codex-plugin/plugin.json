@@ -1,6 +1,6 @@
 {
   "name": "full-team-agile",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Stateful feature and sprint delivery with product, UX, implementation, QA, review, and integration.",
   "author": {
     "name": "Ken Viriya",
@@ -10,5 +10,18 @@
   "repository": "https://github.com/kenviriya/Full-team-AGILE",
   "license": "MIT",
   "keywords": ["agile", "feature-delivery", "productivity"],
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Full-team AGILE",
+    "shortDescription": "Deliver approved features and dependency-safe sprints.",
+    "longDescription": "Coordinate product discovery, PRDs, UX, implementation, QA, review, integration, and releases with resumable workflow state.",
+    "developerName": "Ken Viriya",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/kenviriya/Full-team-AGILE",
+    "defaultPrompt": [
+      "Plan and deliver this feature with Full-team AGILE.",
+      "Continue my saved Full-team AGILE workflow."
+    ]
+  }
 }

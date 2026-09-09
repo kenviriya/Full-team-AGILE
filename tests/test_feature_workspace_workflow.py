@@ -10,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 WORKFLOW = (ROOT / "skills/feature/SKILL.md").read_text()
 README = (ROOT / "README.md").read_text()
+BACKEND = (ROOT / "agents/backend-engineer.md").read_text()
+FRONTEND = (ROOT / "agents/frontend-engineer.md").read_text()
 
 
 def assert_contract_order(test: unittest.TestCase, *phrases: str) -> None:
@@ -816,6 +818,22 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
         self.assertIn("Configure artifact storage", README)
         self.assertIn("/Users/kenviriya/Code/Claude-Brain", README)
 
+    def test_ticket_git_delivery_is_limited_to_the_exact_ticket_branch(self):
+        for phrase in (
+            "commit and push from the recorded ticket runtime",
+            "exactly equals the recorded `feature/<ticket-id>-<slug>` branch",
+            "not `main`, `develop`, the repository return branch, or any configured protected branch",
+            "stage only the ticket's reported owned paths with explicit pathspecs",
+            "push -u origin HEAD:refs/heads/<recorded-ticket-branch>",
+            "never force-push",
+        ):
+            self.assertIn(phrase, WORKFLOW)
+        for agent in (BACKEND, FRONTEND):
+            self.assertIn("reject `main`, `develop`, the return/protected branches, and every other branch", agent)
+            self.assertIn("push only `HEAD` to the same branch on `origin` without force", agent)
+        self.assertNotIn("Never automatically commit, push", WORKFLOW)
+        self.assertNotIn("the workflow never commits", README)
+
     def test_version_three_primary_checkout_record_remains_usable_until_worktree_creation(self):
         v3_workspace = {
             "root": str(self.repo),
@@ -1451,7 +1469,7 @@ class FeatureWorkspaceWorkflowTests(unittest.TestCase):
             "ticket-keyed evidence rolled up to PRD criteria in `04-test-report.md`",
             "Review independently examines one QA-passing ticket branch/runtime at a time",
             "ticket-keyed findings and PRD traceability in `03-review-notes.md`",
-            "enter only after every ticket independently passes QA, review, and required cleanup",
+            "enter only after every ticket is committed, pushed, independently passes QA and review, and completes required cleanup",
             "Do not call the feature integrated or done",
         ):
             self.assertIn(phrase, WORKFLOW)

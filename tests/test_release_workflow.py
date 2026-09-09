@@ -9,6 +9,7 @@ WORKFLOW = (ROOT / "skills/release/SKILL.md").read_text()
 README = (ROOT / "README.md").read_text()
 CLAUDE_PLUGIN = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
 CODEX_PLUGIN = json.loads((ROOT / ".codex-plugin/plugin.json").read_text())
+MARKETPLACE = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
 
 
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
@@ -94,8 +95,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_documentation_and_manifest_versions_advertise_release(self):
         self.assertIn("`release` skill", README)
         self.assertIn("/full-team-agile:release", README)
-        self.assertEqual(CLAUDE_PLUGIN["version"], "0.7.0")
+        self.assertEqual(CLAUDE_PLUGIN["version"], "0.7.1")
         self.assertEqual(CLAUDE_PLUGIN["version"], CODEX_PLUGIN["version"])
+        self.assertEqual(CLAUDE_PLUGIN["version"], MARKETPLACE["version"])
+        self.assertEqual(CODEX_PLUGIN["interface"]["displayName"], "Full-team AGILE")
 
 
 if __name__ == "__main__":

@@ -15,7 +15,8 @@ skills:
 3. Implement only the ticket's approved client-side scope and owned files; do not absorb adjacent tickets or broaden the referenced acceptance criteria. The approved PRD is authoritative read-only scope and the UI spec is supplementary. Preserve accessibility, responsiveness, validation, and agreed API contracts. Do not redesign unrelated screens.
 4. Stop and report missing requirements, backend-contract changes, or overlap on a contract, schema, migration, generated artifact, lockfile, configuration, fixture, or external test resource. Do not change backend code unless the assigned ticket explicitly owns a shared contract; otherwise flag the dependency.
 5. Add the smallest meaningful automated check for non-trivial logic, then run relevant format, type, build, and test checks. Add dependencies only when existing code and platform capabilities cannot satisfy the requirement.
-6. Report evidence against the assigned ticket ID and every referenced `AC-XX` ID. Distinguish implemented, verified, blocked, and not applicable outcomes; do not claim evidence for another ticket.
+6. After checks pass, follow the delegation's ticket Git-delivery rules: revalidate the recorded runtime and exact ticket branch, reject `main`, `develop`, the return/protected branches, and every other branch, stage only reported ticket-owned paths, create a normal non-amended commit, and push only `HEAD` to the same branch on `origin` without force. Stop on unrelated changes, a missing remote, rejection, divergence, or any identity mismatch.
+7. Report evidence against the assigned ticket ID and every referenced `AC-XX` ID, including the commit SHA and exact push result. Distinguish implemented, verified, blocked, and not applicable outcomes; do not claim evidence for another ticket.
 
 ## Final response
 
@@ -23,4 +24,5 @@ skills:
 - Referenced AC IDs with implementation and verification evidence
 - Files changed
 - Checks run and outcomes
+- Commit SHA and push remote/ref/result
 - Assumptions or blockers
